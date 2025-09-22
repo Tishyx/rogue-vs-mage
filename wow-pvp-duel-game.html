@@ -82,6 +82,40 @@
             left: 20px;
         }
 
+        #comboPoints {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            display: flex;
+            gap: 6px;
+            padding: 4px 8px;
+            background: rgba(0, 0, 0, 0.65);
+            border: 2px solid rgba(255, 215, 0, 0.6);
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+            transition: transform 0.25s ease;
+        }
+
+        #comboPoints.combo-change {
+            transform: scale(1.08);
+        }
+
+        .combo-point {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 215, 0, 0.8);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 0 6px rgba(255, 215, 0, 0.25);
+            transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .combo-point.active {
+            background: radial-gradient(circle at center, #ffd54f 0%, #ffa000 80%);
+            box-shadow: 0 0 8px rgba(255, 193, 7, 0.8);
+            transform: scale(1.1);
+        }
+
         #enemyMana {
             top: 55px;
             right: 20px;
@@ -393,6 +427,8 @@
             <div class="energy-bar" style="width: 100%"></div>
         </div>
 
+        <div id="comboPoints"></div>
+
         <div id="playerBuffs"></div>
 
         <div id="enemyHealth" class="health-bar-container">
@@ -420,7 +456,7 @@
             <div class="control-item"><strong>Movement:</strong> WASD</div>
             <div class="control-item"><strong>Camera:</strong> Mouse</div>
             <div class="control-item"><strong>Jump:</strong> Space</div>
-            <div class="control-item"><strong>Abilities:</strong> 1-6</div>
+            <div class="control-item"><strong>Abilities:</strong> 1-7</div>
             <div class="control-item"><strong>Target:</strong> Tab</div>
         </div>
         
@@ -439,6 +475,8 @@
                 maxHealth: 100,
                 energy: 100,
                 maxEnergy: 100,
+                comboPoints: 0,
+                maxComboPoints: 5,
                 isStealthed: false,
                 isRooted: false,
                 rootDuration: 0,
@@ -453,6 +491,8 @@
                         description: 'A vicious melee attack dealing moderate damage to the target.',
                         cost: 40,
                         damage: 25,
+                        buildsCombo: true,
+                        comboPointsGenerated: 1,
                         cooldown: 0,
                         maxCooldown: 0,
                         cooldownText: 'No cooldown'
@@ -465,6 +505,8 @@
                         description: 'Strike from the shadows for massive damage when positioned behind the enemy.',
                         cost: 60,
                         damage: 50,
+                        buildsCombo: true,
+                        comboPointsGenerated: 1,
                         cooldown: 0,
                         maxCooldown: 4,
                         requiresStealth: false,
@@ -515,9 +557,25 @@
                         description: 'Open from stealth with a brutal strike that deals heavy damage.',
                         cost: 60,
                         damage: 70,
+                        buildsCombo: true,
+                        comboPointsGenerated: 2,
                         cooldown: 0,
                         maxCooldown: 0,
                         requiresStealth: true,
+                        cooldownText: 'No cooldown'
+                    },
+                    {
+                        name: 'Eviscerate',
+                        label: 'Eviscerate',
+                        key: '7',
+                        icon: '💥',
+                        description: 'A brutal finishing move that consumes combo points for massive damage.',
+                        cost: 35,
+                        damage: 20,
+                        damagePerCombo: 18,
+                        finisher: true,
+                        cooldown: 0,
+                        maxCooldown: 0,
                         cooldownText: 'No cooldown'
                     }
                 ]
@@ -908,8 +966,11 @@
             }
 
             // Ability usage
-            if (e.key >= '1' && e.key <= '6') {
-                usePlayerAbility(parseInt(e.key) - 1);
+            if (e.key >= '1' && e.key <= '9') {
+                const abilityIndex = parseInt(e.key, 10) - 1;
+                if (abilityIndex < gameState.player.abilities.length) {
+                    usePlayerAbility(abilityIndex);
+                }
             }
         });
 
@@ -1059,25 +1120,56 @@
                         return;
                     }
 
+                    const previousComboPoints = gameState.player.comboPoints || 0;
                     let damage = ability.damage || 0;
+                    let comboPointsUsed = 0;
+
+                    if (ability.finisher) {
+                        comboPointsUsed = previousComboPoints;
+                        const bonusPerPoint = ability.damagePerCombo || 0;
+                        damage += comboPointsUsed * bonusPerPoint;
+                    }
 
                     // Ambush and Backstab get bonus from stealth
                     if ((ability.name === 'Ambush' || ability.name === 'Backstab') && gameState.player.isStealthed) {
                         damage *= 1.5;
                     }
 
+                    let damageDealt = damage;
+
                     if (enemy.shield > 0) {
-                        const shieldDamage = Math.min(damage, enemy.shield);
+                        const shieldDamage = Math.min(damageDealt, enemy.shield);
                         enemy.shield -= shieldDamage;
-                        damage -= shieldDamage;
+                        damageDealt -= shieldDamage;
                         if (enemy.shield <= 0) {
                             addCombatMessage('Ice Barrier broken!', 'damage');
                         }
                     }
 
-                    enemy.health -= damage;
+                    damageDealt = Math.max(0, damageDealt);
+                    enemy.health -= damageDealt;
                     createParticleEffect(enemy.position, 'damage');
-                    addCombatMessage(`${ability.name} hits for ${Math.round(damage)} damage!`, 'damage');
+                    if (ability.finisher && comboPointsUsed > 0) {
+                        addCombatMessage(
+                            `${ability.name} consumes ${comboPointsUsed} combo point${comboPointsUsed === 1 ? '' : 's'} for ${Math.round(damageDealt)} damage!`,
+                            'damage'
+                        );
+                    } else {
+                        addCombatMessage(`${ability.name} hits for ${Math.round(damageDealt)} damage!`, 'damage');
+                    }
+
+                    if (ability.finisher) {
+                        if (gameState.player.comboPoints !== 0) {
+                            gameState.player.comboPoints = 0;
+                        }
+                    } else if (ability.buildsCombo) {
+                        const generated = ability.comboPointsGenerated ?? 1;
+                        const newComboPoints = Math.min(
+                            gameState.player.maxComboPoints,
+                            previousComboPoints + generated
+                        );
+                        gameState.player.comboPoints = newComboPoints;
+                    }
 
                     // Break stealth on damage
                     if (gameState.player.isStealthed) {
@@ -1525,6 +1617,48 @@
             playerEnergyBar.style.width = playerEnergyPercent + '%';
             document.getElementById('playerEnergyText').textContent =
                 `${Math.round(gameState.player.energy)}/${gameState.player.maxEnergy}`;
+
+            // Combo points
+            const comboContainer = document.getElementById('comboPoints');
+            if (comboContainer) {
+                const maxPoints = gameState.player.maxComboPoints || 0;
+                const currentPoints = Math.min(Math.max(0, gameState.player.comboPoints || 0), maxPoints);
+                if (comboContainer.childElementCount !== maxPoints) {
+                    comboContainer.innerHTML = '';
+                    for (let i = 0; i < maxPoints; i++) {
+                        const pip = document.createElement('div');
+                        pip.className = 'combo-point';
+                        comboContainer.appendChild(pip);
+                    }
+                }
+
+                const pips = comboContainer.querySelectorAll('.combo-point');
+                pips.forEach((pip, index) => {
+                    if (index < currentPoints) {
+                        pip.classList.add('active');
+                    } else {
+                        pip.classList.remove('active');
+                    }
+                });
+
+                comboContainer.style.display = maxPoints > 0 ? 'flex' : 'none';
+
+                const previousPoints = comboContainer.dataset.points;
+                const currentPointsStr = String(currentPoints);
+                if (previousPoints !== currentPointsStr) {
+                    comboContainer.dataset.points = currentPointsStr;
+                    comboContainer.classList.remove('combo-change');
+                    void comboContainer.offsetWidth;
+                    comboContainer.classList.add('combo-change');
+                    if (comboContainer._comboTimeout) {
+                        clearTimeout(comboContainer._comboTimeout);
+                    }
+                    comboContainer._comboTimeout = setTimeout(() => {
+                        comboContainer.classList.remove('combo-change');
+                        comboContainer._comboTimeout = null;
+                    }, 250);
+                }
+            }
 
             // Enemy health
             const enemyHealthBar = document.querySelector('#enemyHealth .health-bar');
