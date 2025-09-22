@@ -599,7 +599,14 @@
                         comboPointsGenerated: 1,
                         cooldown: 0,
                         maxCooldown: 0,
-                        cooldownText: 'No cooldown'
+                        cooldownText: 'No cooldown',
+                        visualEffect: {
+                            type: 'directional-slash',
+                            color: 0xff5a36,
+                            particleCount: 18,
+                            startSize: 1.4,
+                            endSize: 0.35
+                        }
                     },
                     {
                         name: 'Backstab',
@@ -615,7 +622,15 @@
                         maxCooldown: 4,
                         requiresStealth: false,
                         requiresBehind: true,
-                        cooldownText: 'Cooldown: 4s'
+                        cooldownText: 'Cooldown: 4s',
+                        visualEffect: {
+                            type: 'directional-slash',
+                            color: 0xffe066,
+                            particleCount: 22,
+                            startSize: 1.6,
+                            endSize: 0.25,
+                            swirl: true
+                        }
                     },
                     {
                         name: 'Stealth',
@@ -627,7 +642,14 @@
                         cooldown: 0,
                         maxCooldown: 10,
                         duration: 10,
-                        cooldownText: 'Cooldown: 10s'
+                        cooldownText: 'Cooldown: 10s',
+                        visualEffect: {
+                            type: 'stealth-entry',
+                            color: 0x4c2a6a,
+                            particleCount: 26,
+                            startSize: 2.4,
+                            endSize: 0.1
+                        }
                     },
                     {
                         name: 'Sprint',
@@ -639,7 +661,14 @@
                         cooldown: 0,
                         maxCooldown: 60,
                         duration: 8,
-                        cooldownText: 'Cooldown: 60s'
+                        cooldownText: 'Cooldown: 60s',
+                        visualEffect: {
+                            type: 'speed-trail',
+                            color: 0xffc14d,
+                            particleCount: 14,
+                            startSize: 1.2,
+                            endSize: 0.2
+                        }
                     },
                     {
                         name: 'Evasion',
@@ -651,7 +680,14 @@
                         cooldown: 0,
                         maxCooldown: 180,
                         duration: 5,
-                        cooldownText: 'Cooldown: 180s'
+                        cooldownText: 'Cooldown: 180s',
+                        visualEffect: {
+                            type: 'defensive-shield',
+                            color: 0x7dd0ff,
+                            particleCount: 16,
+                            startSize: 1.8,
+                            endSize: 0.6
+                        }
                     },
                     {
                         name: 'Ambush',
@@ -666,7 +702,14 @@
                         cooldown: 0,
                         maxCooldown: 0,
                         requiresStealth: true,
-                        cooldownText: 'No cooldown'
+                        cooldownText: 'No cooldown',
+                        visualEffect: {
+                            type: 'shadow-strike',
+                            color: 0x8f5fff,
+                            particleCount: 28,
+                            startSize: 1.7,
+                            endSize: 0.3
+                        }
                     },
                     {
                         name: 'Eviscerate',
@@ -680,7 +723,14 @@
                         finisher: true,
                         cooldown: 0,
                         maxCooldown: 0,
-                        cooldownText: 'No cooldown'
+                        cooldownText: 'No cooldown',
+                        visualEffect: {
+                            type: 'finisher',
+                            color: 0xff3b2f,
+                            particleCount: 32,
+                            startSize: 2.1,
+                            endSize: 0.4
+                        }
                     }
                 ]
             },
@@ -702,11 +752,88 @@
                     isRooted: false,
                     rootDuration: 0,
                     abilities: [
-                        { name: 'Frostbolt', cost: 30, damage: 35, castTime: 2.5, cooldown: 0 },
-                        { name: 'Frost Nova', cost: 40, damage: 15, cooldown: 0, maxCooldown: 20, isInstant: true },
-                        { name: 'Blink', cost: 20, cooldown: 0, maxCooldown: 15, isInstant: true },
-                        { name: 'Ice Barrier', cost: 50, cooldown: 0, maxCooldown: 30, shield: 40, isInstant: true },
-                        { name: 'Cone of Cold', cost: 35, damage: 25, cooldown: 0, maxCooldown: 8, isInstant: true }
+                        {
+                            name: 'Frostbolt',
+                            cost: 30,
+                            damage: 35,
+                            castTime: 2.5,
+                            cooldown: 0,
+                            visualEffect: {
+                                type: 'frost-cast',
+                                color: 0x7dd0ff,
+                                particleCount: 18
+                            }
+                        },
+                        {
+                            name: 'Frost Nova',
+                            cost: 40,
+                            damage: 15,
+                            cooldown: 0,
+                            maxCooldown: 20,
+                            isInstant: true,
+                            visualEffect: {
+                                type: 'frost-field',
+                                color: 0xb3ecff,
+                                particleCount: 24
+                            }
+                        },
+                        {
+                            name: 'Blink',
+                            cost: 20,
+                            cooldown: 0,
+                            maxCooldown: 15,
+                            isInstant: true,
+                            visualEffect: {
+                                type: 'blink',
+                                color: 0xcbe5ff,
+                                particleCount: 20
+                            }
+                        },
+                        {
+                            name: 'Ice Barrier',
+                            cost: 50,
+                            cooldown: 0,
+                            maxCooldown: 30,
+                            shield: 40,
+                            isInstant: true,
+                            visualEffect: {
+                                type: 'defensive-shield',
+                                color: 0xa7f0ff,
+                                particleCount: 18,
+                                startSize: 2.4,
+                                endSize: 1.0
+                            }
+                        },
+                        {
+                            name: 'Cone of Cold',
+                            cost: 35,
+                            damage: 25,
+                            cooldown: 0,
+                            maxCooldown: 8,
+                            isInstant: true,
+                            visualEffect: {
+                                type: 'frost-cone',
+                                color: 0x9cdcff,
+                                particleCount: 28
+                            }
+                        },
+                        {
+                            name: 'Arcane Missiles',
+                            cost: 45,
+                            damage: 14,
+                            missiles: 3,
+                            cooldown: 0,
+                            maxCooldown: 12,
+                            isInstant: true,
+                            visualEffect: {
+                                type: 'arcane-missiles',
+                                color: 0xb695ff,
+                                particleCount: 3,
+                                startSize: 1.2,
+                                endSize: 0.3,
+                                missiles: 3
+                            }
+                        }
                     ],
                     shield: 0,
                     aiState: 'aggressive',
@@ -1195,16 +1322,71 @@
         scene.add(enemyMesh);
 
         // Particle system for effects
-        class Particle {
+        const effectClock = new THREE.Clock();
+        const spritesheetCache = new Map();
+
+        function colorToCanvasStyle(colorValue) {
+            const color = new THREE.Color(colorValue);
+            return color.getStyle();
+        }
+
+        function getSpritesheetTexture({ baseColor, highlightColor, frameCount = 4 }) {
+            const cacheKey = `${frameCount}_${baseColor}_${highlightColor}`;
+            if (spritesheetCache.has(cacheKey)) {
+                return spritesheetCache.get(cacheKey);
+            }
+
+            const size = 128;
+            const canvas = document.createElement('canvas');
+            canvas.width = size * frameCount;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            for (let i = 0; i < frameCount; i++) {
+                const progress = frameCount <= 1 ? 0 : i / (frameCount - 1);
+                const centerX = size * (i + 0.5);
+                const centerY = size / 2;
+                const gradient = ctx.createRadialGradient(
+                    centerX,
+                    centerY,
+                    size * 0.05,
+                    centerX,
+                    centerY,
+                    size * (0.4 + 0.25 * (1 - progress))
+                );
+
+                gradient.addColorStop(0, highlightColor);
+                gradient.addColorStop(0.4, baseColor);
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                ctx.globalAlpha = 1 - progress * 0.2;
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, size * (0.45 + 0.1 * (1 - progress)), 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.ClampToEdgeWrapping;
+            texture.repeat.set(1 / frameCount, 1);
+            texture.needsUpdate = true;
+
+            const spritesheet = { texture, frameCount };
+            spritesheetCache.set(cacheKey, spritesheet);
+            return spritesheet;
+        }
+
+        class SimpleParticle {
             constructor(position, velocity, color, lifetime) {
                 this.position = position.clone();
-                this.velocity = velocity;
+                this.velocity = velocity.clone();
                 this.color = color;
                 this.lifetime = lifetime;
                 this.maxLifetime = lifetime;
-                
+
                 const geometry = new THREE.SphereGeometry(0.1, 4, 4);
-                const material = new THREE.MeshBasicMaterial({ color: color });
+                const material = new THREE.MeshBasicMaterial({ color, transparent: true });
                 this.mesh = new THREE.Mesh(geometry, material);
                 this.mesh.position.copy(this.position);
                 scene.add(this.mesh);
@@ -1214,30 +1396,553 @@
                 this.lifetime -= deltaTime;
                 if (this.lifetime <= 0) {
                     scene.remove(this.mesh);
+                    this.mesh.geometry.dispose();
+                    this.mesh.material.dispose();
                     return false;
                 }
-                
-                this.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+
+                this.position.addScaledVector(this.velocity, deltaTime);
                 this.mesh.position.copy(this.position);
-                this.mesh.material.opacity = this.lifetime / this.maxLifetime;
-                this.mesh.material.transparent = true;
-                
+                this.mesh.material.opacity = THREE.MathUtils.clamp(this.lifetime / this.maxLifetime, 0, 1);
+
                 return true;
             }
         }
 
-        function createParticleEffect(position, type) {
-            const particleCount = type === 'frost' ? 20 : 15;
+        class SpriteParticle {
+            constructor({
+                position,
+                velocity = new THREE.Vector3(),
+                lifetime = 1,
+                startSize = 1,
+                endSize = 0.2,
+                startOpacity = 1,
+                endOpacity = 0,
+                color = 0xffffff,
+                endColor = null,
+                frameCount = 4,
+                additive = false,
+                verticalDrift = 0
+            }) {
+                this.position = position.clone();
+                this.velocity = velocity.clone();
+                this.verticalDrift = verticalDrift;
+                this.lifetime = lifetime;
+                this.elapsed = 0;
+                this.startSize = startSize;
+                this.endSize = endSize;
+                this.startOpacity = startOpacity;
+                this.endOpacity = endOpacity;
+                this.startColor = new THREE.Color(color);
+                this.endColor = endColor ? new THREE.Color(endColor) : this.startColor.clone();
+                this.frameCount = frameCount;
+
+                const highlight = this.startColor.clone().lerp(new THREE.Color(0xffffff), 0.35);
+                const spritesheet = getSpritesheetTexture({
+                    baseColor: colorToCanvasStyle(this.startColor),
+                    highlightColor: colorToCanvasStyle(highlight),
+                    frameCount
+                });
+
+                const texture = spritesheet.texture.clone();
+                texture.repeat.copy(spritesheet.texture.repeat);
+                texture.needsUpdate = true;
+
+                this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                    map: texture,
+                    color: this.startColor,
+                    transparent: true,
+                    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+                    depthWrite: false
+                }));
+                this.sprite.material.opacity = this.startOpacity;
+                this.sprite.position.copy(this.position);
+                this.sprite.scale.set(startSize, startSize, startSize);
+                scene.add(this.sprite);
+            }
+
+            update(deltaTime) {
+                this.elapsed += deltaTime;
+                if (this.elapsed >= this.lifetime) {
+                    scene.remove(this.sprite);
+                    if (this.sprite.material.map) {
+                        this.sprite.material.map.dispose();
+                    }
+                    this.sprite.material.dispose();
+                    return false;
+                }
+
+                this.position.addScaledVector(this.velocity, deltaTime);
+                this.position.y += this.verticalDrift * deltaTime;
+                this.sprite.position.copy(this.position);
+
+                const progress = THREE.MathUtils.clamp(this.elapsed / this.lifetime, 0, 1);
+                const size = THREE.MathUtils.lerp(this.startSize, this.endSize, progress);
+                this.sprite.scale.set(size, size, size);
+
+                const color = this.startColor.clone().lerp(this.endColor, progress);
+                this.sprite.material.color.copy(color);
+                this.sprite.material.opacity = THREE.MathUtils.lerp(this.startOpacity, this.endOpacity, progress);
+
+                if (this.frameCount > 1 && this.sprite.material.map) {
+                    const frame = Math.min(this.frameCount - 1, Math.floor(progress * this.frameCount));
+                    this.sprite.material.map.offset.x = frame / this.frameCount;
+                }
+
+                return true;
+            }
+        }
+
+        const arcaneMissileShader = {
+            vertexShader: `varying vec2 vUv;\nvoid main() {\n    vUv = uv;\n    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}`,
+            fragmentShader: `varying vec2 vUv;\nuniform vec3 color;\nuniform float opacity;\nvoid main() {\n    vec2 centered = vUv - vec2(0.5);\n    float dist = length(centered);\n    float glow = smoothstep(0.45, 0.0, dist);\n    gl_FragColor = vec4(color, glow * opacity);\n}`
+        };
+
+        class ArcaneMissileProjectile {
+            constructor({ origin, target, duration = 0.9, color = 0xb695ff, startSize = 1.1, endSize = 0.25, onComplete = null }) {
+                this.origin = origin.clone();
+                this.target = target.clone();
+                this.duration = duration;
+                this.elapsed = 0;
+                this.startSize = startSize;
+                this.endSize = endSize;
+                this.onComplete = onComplete;
+                this.direction = this.target.clone().sub(this.origin).normalize();
+                this.color = new THREE.Color(color);
+
+                this.geometry = new THREE.PlaneGeometry(1, 1);
+                this.material = new THREE.ShaderMaterial({
+                    uniforms: {
+                        color: { value: this.color },
+                        opacity: { value: 1 }
+                    },
+                    vertexShader: arcaneMissileShader.vertexShader,
+                    fragmentShader: arcaneMissileShader.fragmentShader,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+
+                this.mesh = new THREE.Mesh(this.geometry, this.material);
+                this.mesh.position.copy(this.origin);
+                this.mesh.lookAt(this.target);
+                this.mesh.scale.set(this.startSize, this.startSize, this.startSize);
+                scene.add(this.mesh);
+            }
+
+            update(deltaTime) {
+                this.elapsed += deltaTime;
+                const progress = THREE.MathUtils.clamp(this.elapsed / this.duration, 0, 1);
+
+                const currentPosition = new THREE.Vector3().lerpVectors(this.origin, this.target, progress);
+                this.mesh.position.copy(currentPosition);
+                this.mesh.lookAt(currentPosition.clone().add(this.direction));
+
+                const size = THREE.MathUtils.lerp(this.startSize, this.endSize, progress);
+                this.mesh.scale.set(size, size, size);
+                this.material.uniforms.opacity.value = 1 - progress;
+
+                if (Math.random() < 0.7) {
+                    const drift = new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.3,
+                        Math.random() * 0.4,
+                        (Math.random() - 0.5) * 0.3
+                    );
+                    const trailVelocity = this.direction.clone().multiplyScalar(-1.2).add(drift);
+                    gameState.particles.push(new SpriteParticle({
+                        position: currentPosition.clone(),
+                        velocity: trailVelocity,
+                        lifetime: 0.6,
+                        startSize: this.startSize * 0.6,
+                        endSize: this.endSize * 0.2,
+                        color: this.color.getHex(),
+                        endColor: 0xffffff,
+                        frameCount: 4,
+                        additive: true,
+                        verticalDrift: 0.3
+                    }));
+                }
+
+                if (progress >= 1) {
+                    scene.remove(this.mesh);
+                    this.geometry.dispose();
+                    this.material.dispose();
+                    if (typeof this.onComplete === 'function') {
+                        this.onComplete(this.target.clone());
+                    }
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
+        function createSpriteBurst(position, {
+            particleCount = 12,
+            color = 0xffffff,
+            endColor = null,
+            startSize = 1,
+            endSize = 0.2,
+            lifetime = 0.8,
+            spread = 1.5,
+            upward = 1.5,
+            additive = true,
+            frameCount = 4,
+            verticalDrift = 0
+        } = {}) {
+            const origin = position.clone();
             for (let i = 0; i < particleCount; i++) {
                 const velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 5,
-                    Math.random() * 5,
-                    (Math.random() - 0.5) * 5
+                    (Math.random() - 0.5) * spread,
+                    Math.random() * upward,
+                    (Math.random() - 0.5) * spread
                 );
-                const color = type === 'frost' ? 0x00bfff : 
-                              type === 'damage' ? 0xff0000 : 
-                              type === 'heal' ? 0x00ff00 : 0xffff00;
-                gameState.particles.push(new Particle(position, velocity, color, 1));
+                gameState.particles.push(new SpriteParticle({
+                    position: origin.clone(),
+                    velocity,
+                    lifetime,
+                    startSize,
+                    endSize,
+                    color,
+                    endColor: endColor ?? color,
+                    frameCount,
+                    additive,
+                    verticalDrift
+                }));
+            }
+        }
+
+        function createDirectionalSlashEffect(position, direction, config = {}) {
+            const basePosition = position.clone();
+            const dir = direction.clone().normalize();
+            const orthogonal = new THREE.Vector3(-dir.z, 0, dir.x);
+            const count = config.particleCount || 18;
+            for (let i = 0; i < count; i++) {
+                const sway = (i / count - 0.5) * (config.swirl ? 1.2 : 0.6);
+                const velocity = dir.clone().multiplyScalar(2.2 + Math.random() * 0.6)
+                    .add(orthogonal.clone().multiplyScalar(sway))
+                    .add(new THREE.Vector3(0, Math.random() * 0.8, 0));
+                gameState.particles.push(new SpriteParticle({
+                    position: basePosition.clone(),
+                    velocity,
+                    lifetime: config.lifetime || 0.6,
+                    startSize: config.startSize || 1.2,
+                    endSize: config.endSize || 0.2,
+                    color: config.color || 0xff5533,
+                    endColor: 0xfff7d6,
+                    frameCount: 5,
+                    additive: true
+                }));
+            }
+        }
+
+        function createStealthEntryEffect(position, config = {}) {
+            const origin = position.clone();
+            const count = config.particleCount || 24;
+            for (let i = 0; i < count; i++) {
+                const angle = (i / count) * Math.PI * 2;
+                const radius = 0.6 + Math.random() * 0.4;
+                const offset = new THREE.Vector3(
+                    Math.cos(angle) * radius,
+                    (Math.random() - 0.5) * 0.2,
+                    Math.sin(angle) * radius
+                );
+                const particlePos = origin.clone().add(offset);
+                const velocity = offset.clone().multiplyScalar(-1.2).add(new THREE.Vector3(0, 1.2 + Math.random() * 0.6, 0));
+                gameState.particles.push(new SpriteParticle({
+                    position: particlePos,
+                    velocity,
+                    lifetime: config.lifetime || 1.1,
+                    startSize: config.startSize || 2.2,
+                    endSize: config.endSize || 0.1,
+                    startOpacity: 0.9,
+                    endOpacity: 0,
+                    color: config.color || 0x4c2a6a,
+                    endColor: 0x000000,
+                    frameCount: 6,
+                    additive: true,
+                    verticalDrift: -0.3
+                }));
+            }
+        }
+
+        function createFinisherEffect(position, config = {}) {
+            const origin = position.clone();
+            createSpriteBurst(origin, {
+                particleCount: config.particleCount || 28,
+                color: config.color || 0xff3b2f,
+                endColor: 0xfff2d4,
+                startSize: config.startSize || 2,
+                endSize: config.endSize || 0.3,
+                lifetime: 1.1,
+                spread: 2.2,
+                upward: 2.8,
+                additive: true,
+                frameCount: 6
+            });
+
+            for (let i = 0; i < 8; i++) {
+                const velocity = new THREE.Vector3(
+                    Math.cos((i / 8) * Math.PI * 2) * 1.5,
+                    3 + Math.random() * 1,
+                    Math.sin((i / 8) * Math.PI * 2) * 1.5
+                );
+                gameState.particles.push(new SpriteParticle({
+                    position: origin.clone(),
+                    velocity,
+                    lifetime: 1.3,
+                    startSize: (config.startSize || 2) * 0.8,
+                    endSize: (config.endSize || 0.3) * 0.5,
+                    color: config.color || 0xff3b2f,
+                    endColor: 0xffffff,
+                    frameCount: 4,
+                    additive: true
+                }));
+            }
+        }
+
+        function createSpeedTrailEffect(caster, config = {}) {
+            if (!caster) return;
+            const direction = caster.velocity && caster.velocity.lengthSq() > 0
+                ? caster.velocity.clone().normalize()
+                : new THREE.Vector3(Math.sin(caster.rotation || 0), 0, Math.cos(caster.rotation || 0));
+            const basePosition = caster.position.clone().add(new THREE.Vector3(0, 0.5, 0));
+            const count = config.particleCount || 12;
+            for (let i = 0; i < count; i++) {
+                const offset = direction.clone().multiplyScalar(-0.5 - Math.random() * 1.5)
+                    .add(new THREE.Vector3((Math.random() - 0.5) * 0.6, Math.random() * 0.4, (Math.random() - 0.5) * 0.6));
+                const particlePos = basePosition.clone().add(offset);
+                const velocity = direction.clone().multiplyScalar(-3).add(new THREE.Vector3(0, 1 + Math.random(), 0));
+                gameState.particles.push(new SpriteParticle({
+                    position: particlePos,
+                    velocity,
+                    lifetime: config.lifetime || 0.7,
+                    startSize: config.startSize || 1.2,
+                    endSize: config.endSize || 0.1,
+                    color: config.color || 0xffc14d,
+                    endColor: 0xffffff,
+                    frameCount: 5,
+                    additive: true
+                }));
+            }
+        }
+
+        function createDefensiveShieldEffect(target, config = {}) {
+            if (!target) return;
+            const center = target.position.clone().add(new THREE.Vector3(0, 1, 0));
+            const ringParticles = config.particleCount || 18;
+            for (let i = 0; i < ringParticles; i++) {
+                const angle = (i / ringParticles) * Math.PI * 2;
+                const radius = 1 + Math.random() * 0.2;
+                const offset = new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle * 2) * 0.2, Math.sin(angle) * radius);
+                const particlePos = center.clone().add(offset);
+                const velocity = offset.clone().multiplyScalar(-0.6);
+                gameState.particles.push(new SpriteParticle({
+                    position: particlePos,
+                    velocity,
+                    lifetime: config.lifetime || 1.2,
+                    startSize: config.startSize || 1.6,
+                    endSize: config.endSize || 0.8,
+                    startOpacity: 0.8,
+                    endOpacity: 0.1,
+                    color: config.color || 0x7dd0ff,
+                    endColor: 0xffffff,
+                    frameCount: 5,
+                    additive: true,
+                    verticalDrift: 0.1
+                }));
+            }
+        }
+
+        function createArcaneImpactEffect(position, config = {}) {
+            const center = position.clone();
+            createSpriteBurst(center, {
+                particleCount: 12,
+                color: config.color || 0xb695ff,
+                endColor: 0xffffff,
+                startSize: 1.2,
+                endSize: 0.15,
+                lifetime: 0.7,
+                spread: 1.2,
+                upward: 1.2,
+                additive: true,
+                frameCount: 5
+            });
+        }
+
+        function createArcaneMissilesEffect(origin, {
+            target,
+            missiles = 3,
+            color = 0xb695ff,
+            startSize = 1.1,
+            endSize = 0.25,
+            missileInterval = 0.18,
+            onImpact
+        } = {}) {
+            if (!target) return;
+            const targetPosition = target.clone();
+            const originPosition = origin.clone();
+            for (let i = 0; i < missiles; i++) {
+                const delay = missileInterval * i;
+                scheduleTimeout(() => {
+                    const projectile = new ArcaneMissileProjectile({
+                        origin: originPosition.clone(),
+                        target: targetPosition.clone(),
+                        duration: 0.8 + i * 0.05,
+                        color,
+                        startSize: startSize * (1 + Math.random() * 0.2),
+                        endSize,
+                        onComplete: impactPosition => {
+                            createArcaneImpactEffect(impactPosition, { color });
+                            if (typeof onImpact === 'function') {
+                                onImpact(impactPosition.clone());
+                            }
+                        }
+                    });
+                    gameState.particles.push(projectile);
+                }, delay * 1000);
+            }
+        }
+
+        function createFrostBurstEffect(position, config = {}) {
+            createSpriteBurst(position, {
+                particleCount: config.particleCount || 18,
+                color: config.color || 0x7dd0ff,
+                endColor: 0xffffff,
+                startSize: config.startSize || 1.4,
+                endSize: config.endSize || 0.2,
+                lifetime: config.lifetime || 0.9,
+                spread: 1.6,
+                upward: 1.4,
+                additive: true,
+                frameCount: 5
+            });
+        }
+
+        function createBlinkEffect(position, config = {}) {
+            const base = position.clone();
+            createSpriteBurst(base, {
+                particleCount: config.particleCount || 16,
+                color: config.color || 0xcbe5ff,
+                endColor: 0xffffff,
+                startSize: config.startSize || 1.6,
+                endSize: config.endSize || 0.1,
+                lifetime: config.lifetime || 0.6,
+                spread: 1,
+                upward: 1,
+                additive: true,
+                frameCount: 6
+            });
+        }
+
+        function triggerVisualEffect(ability, context = {}) {
+            if (!ability || !ability.visualEffect) {
+                if (context.fallbackType) {
+                    createParticleEffect(context.position || new THREE.Vector3(), context.fallbackType, context);
+                }
+                return;
+            }
+
+            const effect = ability.visualEffect;
+            const basePosition = (context.position && context.position.clone)
+                ? context.position.clone()
+                : context.position || (context.target && context.target.position ? context.target.position.clone() : (context.origin ? context.origin.clone() : new THREE.Vector3()));
+
+            switch (effect.type) {
+                case 'stealth-entry':
+                    createStealthEntryEffect(basePosition, effect);
+                    break;
+                case 'finisher':
+                    createFinisherEffect(basePosition, effect);
+                    break;
+                case 'directional-slash': {
+                    const defaultForward = new THREE.Vector3(0, 0, 1);
+                    const casterPosition = context.caster && context.caster.position ? context.caster.position : null;
+                    const direction = context.direction ? context.direction.clone() : (context.targetPosition && casterPosition
+                        ? context.targetPosition.clone().sub(casterPosition).normalize()
+                        : defaultForward);
+                    createDirectionalSlashEffect(basePosition, direction, effect);
+                    break;
+                }
+                case 'speed-trail':
+                    createSpeedTrailEffect(context.caster, effect);
+                    break;
+                case 'defensive-shield':
+                    createDefensiveShieldEffect(context.target || context.caster, effect);
+                    break;
+                case 'shadow-strike': {
+                    const direction = context.direction ? context.direction.clone() : (context.caster && context.target ? context.target.position.clone().sub(context.caster.position).normalize() : new THREE.Vector3(0, 0, 1));
+                    createStealthEntryEffect(context.target ? context.target.position.clone() : basePosition, {
+                        ...effect,
+                        startSize: (effect.startSize || 1.6) * 0.8,
+                        particleCount: (effect.particleCount || 24) / 2
+                    });
+                    createDirectionalSlashEffect(basePosition, direction, effect);
+                    break;
+                }
+                case 'arcane-missiles': {
+                    const origin = context.origin || (context.caster ? context.caster.position.clone() : basePosition.clone());
+                    const target = context.targetPosition || (context.target ? context.target.position.clone() : basePosition.clone());
+                    const missileCount = context.missiles ?? effect.missiles ?? effect.particleCount;
+                    createArcaneMissilesEffect(origin, {
+                        ...effect,
+                        missiles: missileCount,
+                        target,
+                        onImpact: context.onImpact || effect.onImpact
+                    });
+                    break;
+                }
+                case 'frost-cast':
+                case 'frost-field':
+                case 'frost-cone':
+                    createFrostBurstEffect(basePosition, effect);
+                    break;
+                case 'blink':
+                    createBlinkEffect(basePosition, effect);
+                    break;
+                default:
+                    createSpriteBurst(basePosition, effect);
+                    break;
+            }
+        }
+
+        function createParticleEffect(position, type, options = {}) {
+            switch (type) {
+                case 'frost':
+                    createFrostBurstEffect(position, options);
+                    return;
+                case 'damage':
+                    createSpriteBurst(position, { color: 0xff4433, endColor: 0xfff2d4, spread: 1.4, upward: 1.2 });
+                    return;
+                case 'heal':
+                    createSpriteBurst(position, { color: 0x4cff7d, endColor: 0xffffff, spread: 1.2, upward: 1.6 });
+                    return;
+                case 'stealth-entry':
+                    createStealthEntryEffect(position, options);
+                    return;
+                case 'finisher':
+                    createFinisherEffect(position, options);
+                    return;
+                case 'arcaneMissiles':
+                    createArcaneMissilesEffect(position, options);
+                    return;
+                case 'arcaneImpact':
+                    createArcaneImpactEffect(position, options);
+                    return;
+                default: {
+                    const particleCount = options.particleCount || 15;
+                    for (let i = 0; i < particleCount; i++) {
+                        const velocity = new THREE.Vector3(
+                            (Math.random() - 0.5) * 5,
+                            Math.random() * 5,
+                            (Math.random() - 0.5) * 5
+                        );
+                        const color = type === 'damage' ? 0xff0000 :
+                                      type === 'heal' ? 0x00ff00 :
+                                      type === 'frost' ? 0x00bfff : 0xffff00;
+                        gameState.particles.push(new SimpleParticle(position, velocity, color, 1));
+                    }
+                }
             }
         }
 
@@ -1411,6 +2116,10 @@
                     playerMaterial.opacity = 0.3;
                     playerMaterial.transparent = true;
                     addCombatMessage('You vanish into the shadows!', 'buff');
+                    triggerVisualEffect(ability, {
+                        caster: gameState.player,
+                        position: gameState.player.position.clone()
+                    });
                     break;
 
                 case 'Sprint':
@@ -1420,6 +2129,10 @@
                         type: 'buff'
                     });
                     addCombatMessage('Sprint activated!', 'buff');
+                    triggerVisualEffect(ability, {
+                        caster: gameState.player,
+                        position: gameState.player.position.clone()
+                    });
                     break;
 
                 case 'Evasion':
@@ -1429,8 +2142,12 @@
                         type: 'buff'
                     });
                     addCombatMessage('Evasion activated!', 'buff');
+                    triggerVisualEffect(ability, {
+                        caster: gameState.player,
+                        position: gameState.player.position.clone()
+                    });
                     break;
-                    
+
                 default:
                     // Damage abilities
                     if (distance > 5) {
@@ -1466,7 +2183,21 @@
 
                     damageDealt = Math.max(0, damageDealt);
                     enemy.health -= damageDealt;
-                    createParticleEffect(enemy.position, 'damage');
+                    const impactPosition = enemy.position.clone();
+                    const direction = impactPosition.clone().sub(gameState.player.position);
+                    if (direction.lengthSq() > 0) {
+                        direction.normalize();
+                    } else {
+                        direction.set(0, 0, 1);
+                    }
+                    triggerVisualEffect(ability, {
+                        caster: gameState.player,
+                        target: enemy,
+                        position: impactPosition,
+                        direction,
+                        targetPosition: impactPosition.clone(),
+                        fallbackType: 'damage'
+                    });
                     if (ability.finisher && comboPointsUsed > 0) {
                         addCombatMessage(
                             `${ability.name} consumes ${comboPointsUsed} combo point${comboPointsUsed === 1 ? '' : 's'} for ${Math.round(damageDealt)} damage!`,
@@ -1623,7 +2354,11 @@
                         enemy.mana -= coneOfCold.cost || 0;
                         coneOfCold.cooldown = coneOfCold.maxCooldown || 0;
                         enemy.detectCooldown = 4;
-                        createParticleEffect(enemy.position, 'frost');
+                        triggerVisualEffect(coneOfCold, {
+                            caster: enemy,
+                            position: enemy.position.clone().add(new THREE.Vector3(0, 1, 0)),
+                            target: gameState.player
+                        });
                         addCombatMessage(`${getEnemyName(enemy)} sweeps the area with Cone of Cold, revealing you!`, 'ability-use');
                         removePlayerBuff('stealth');
                         gameState.player.isStealthed = false;
@@ -1637,7 +2372,11 @@
                         enemy.mana -= 50;
                         enemy.abilities[3].cooldown = enemy.abilities[3].maxCooldown;
                         addCombatMessage(`${getEnemyName(enemy)} casts Ice Barrier!`, 'buff');
-                        createParticleEffect(enemy.position, 'frost');
+                        triggerVisualEffect(enemy.abilities[3], {
+                            caster: enemy,
+                            target: enemy,
+                            position: enemy.position.clone().add(new THREE.Vector3(0, 1, 0))
+                        });
                     }
                     // Frost Nova when player is close
                     else if (playerVisible && distanceToPlayer < 5 && enemy.abilities[1].cooldown <= 0 && enemy.mana >= 40) {
@@ -1647,7 +2386,11 @@
                         gameState.player.health -= 15;
                         enemy.mana -= 40;
                         enemy.abilities[1].cooldown = enemy.abilities[1].maxCooldown;
-                        createParticleEffect(gameState.player.position, 'frost');
+                        triggerVisualEffect(enemy.abilities[1], {
+                            caster: enemy,
+                            target: gameState.player,
+                            position: gameState.player.position.clone().add(new THREE.Vector3(0, 1, 0))
+                        });
                         addCombatMessage(`${getEnemyName(enemy)} casts Frost Nova! You are frozen!`, 'damage');
 
                         // Blink away after nova
@@ -1658,7 +2401,10 @@
                                 enemy.mana -= 20;
                                 enemy.abilities[2].cooldown = enemy.abilities[2].maxCooldown;
                                 addCombatMessage(`${getEnemyName(enemy)} blinks away!`, 'ability-use');
-                                createParticleEffect(enemy.position, 'frost');
+                                triggerVisualEffect(enemy.abilities[2], {
+                                    caster: enemy,
+                                    position: enemy.position.clone().add(new THREE.Vector3(0, 1, 0))
+                                });
                             }
                         }, 100);
                     }
@@ -1667,8 +2413,36 @@
                         gameState.player.health -= 25;
                         enemy.mana -= 35;
                         enemy.abilities[4].cooldown = enemy.abilities[4].maxCooldown;
-                        createParticleEffect(gameState.player.position, 'frost');
+                        triggerVisualEffect(enemy.abilities[4], {
+                            caster: enemy,
+                            target: gameState.player,
+                            position: gameState.player.position.clone().add(new THREE.Vector3(0, 1, 0))
+                        });
                         addCombatMessage(`${getEnemyName(enemy)} casts Cone of Cold for 25 damage!`, 'damage');
+                    }
+                    // Arcane Missiles at long range
+                    else if (playerVisible && distanceToPlayer > 10 && enemy.abilities[5] && enemy.abilities[5].cooldown <= 0 && enemy.mana >= (enemy.abilities[5].cost || 0)) {
+                        const arcaneMissiles = enemy.abilities[5];
+                        enemy.mana -= arcaneMissiles.cost || 0;
+                        arcaneMissiles.cooldown = arcaneMissiles.maxCooldown || 0;
+                        addCombatMessage(`${getEnemyName(enemy)} launches Arcane Missiles!`, 'ability-use');
+                        const origin = enemy.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+                        const targetPosition = gameState.player.position.clone().add(new THREE.Vector3(0, 1, 0));
+                        const missileDamage = arcaneMissiles.damage || 14;
+                        triggerVisualEffect(arcaneMissiles, {
+                            caster: enemy,
+                            origin,
+                            target: gameState.player,
+                            targetPosition,
+                            missiles: arcaneMissiles.missiles,
+                            onImpact: () => {
+                                if (gameState.player.health <= 0) {
+                                    return;
+                                }
+                                gameState.player.health -= missileDamage;
+                                addCombatMessage(`Arcane Missiles hits for ${missileDamage} damage!`, 'damage');
+                            }
+                        });
                     }
                     // Frostbolt as default
                     else if (playerVisible) {
@@ -1746,7 +2520,12 @@
                     gameState.player.health -= damage;
                     const manaCost = castCost > 0 ? castCost : 30;
                     enemy.mana = Math.max(0, enemy.mana - manaCost);
-                    createParticleEffect(gameState.player.position, 'frost');
+                    const frostboltAbility = enemy.abilities.find(ability => ability.name === 'Frostbolt');
+                    triggerVisualEffect(frostboltAbility, {
+                        caster: enemy,
+                        target: gameState.player,
+                        position: gameState.player.position.clone().add(new THREE.Vector3(0, 1, 0))
+                    });
                     addCombatMessage(`Frostbolt hits for ${damage} damage!`, 'damage');
 
                     // Slow effect
@@ -2246,6 +3025,7 @@
 
             const deltaTime = (currentTime - lastTime) / 1000;
             lastTime = currentTime;
+            const effectDelta = effectClock.getDelta();
 
             if (!gameState.isPaused) {
                 if (!gameState.gameOver) {
@@ -2255,7 +3035,7 @@
                 }
 
                 // Update particles
-                gameState.particles = gameState.particles.filter(particle => particle.update(deltaTime));
+                gameState.particles = gameState.particles.filter(particle => particle.update(effectDelta));
 
                 updateCamera(deltaTime);
             }
