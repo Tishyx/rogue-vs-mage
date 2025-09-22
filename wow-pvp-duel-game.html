@@ -87,6 +87,59 @@
             right: 20px;
         }
 
+        #enemyCastBar {
+            position: absolute;
+            top: 85px;
+            right: 20px;
+            width: 300px;
+            height: 24px;
+            background: rgba(0, 0, 0, 0.75);
+            border: 2px solid #163b63;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+            visibility: hidden;
+            opacity: 0;
+            transform: translateY(-6px);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+
+        #enemyCastBar.active {
+            visibility: visible;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #enemyCastBar .cast-progress {
+            height: 100%;
+            width: 0;
+            background: linear-gradient(to right, #7dd0ff, #2a7edc);
+            transition: width 0.05s linear;
+        }
+
+        #enemyCastBar .cast-text {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #f5f9ff;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+        }
+
+        #enemyCastBar.interrupted .cast-progress {
+            background: linear-gradient(to right, #ff7a7a, #d32f2f);
+        }
+
+        #enemyCastBar.interrupted .cast-text {
+            color: #ffdede;
+        }
+
         .energy-bar {
             height: 100%;
             background: linear-gradient(to bottom, #ffeb3b, #f57c00);
@@ -308,6 +361,11 @@
             <div class="bar-text resource-text">Mana: <span id="enemyManaText">100/100</span></div>
             <div class="mana-bar" style="width: 100%"></div>
         </div>
+
+        <div id="enemyCastBar">
+            <div class="cast-progress"></div>
+            <div class="cast-text">Ready</div>
+        </div>
         
         <div id="targetIndicator">Target: Frost Mage</div>
         
@@ -431,6 +489,8 @@
                 maxMana: 100,
                 isCasting: false,
                 castTime: 0,
+                castDuration: 0,
+                castCost: 0,
                 currentCast: null,
                 isRooted: false,
                 rootDuration: 0,
@@ -459,6 +519,86 @@
             gameOver: false,
             particles: []
         };
+
+        const enemyCastBarUI = {
+            container: document.getElementById('enemyCastBar'),
+            progress: document.querySelector('#enemyCastBar .cast-progress'),
+            text: document.querySelector('#enemyCastBar .cast-text'),
+            hideTimeout: null
+        };
+
+        function showEnemyCastBar(spellName, duration) {
+            if (!enemyCastBarUI.container) return;
+            if (enemyCastBarUI.hideTimeout) {
+                clearTimeout(enemyCastBarUI.hideTimeout);
+                enemyCastBarUI.hideTimeout = null;
+            }
+
+            enemyCastBarUI.container.classList.add('active');
+            enemyCastBarUI.container.classList.remove('interrupted');
+            enemyCastBarUI.progress.style.width = '0%';
+
+            const durationText = duration > 0 ? ` (${duration.toFixed(1)}s)` : '';
+            enemyCastBarUI.text.textContent = `${spellName}${durationText}`;
+        }
+
+        function updateEnemyCastBarProgress(remainingTime) {
+            if (!enemyCastBarUI.container) return;
+            const duration = gameState.enemy.castDuration;
+            if (duration <= 0) return;
+
+            const clampedRemaining = Math.max(0, remainingTime);
+            const percent = Math.min(1, Math.max(0, (duration - clampedRemaining) / duration));
+            enemyCastBarUI.progress.style.width = `${(percent * 100).toFixed(2)}%`;
+
+            const secondsText = clampedRemaining.toFixed(1);
+            enemyCastBarUI.text.textContent = `${gameState.enemy.currentCast} (${secondsText}s)`;
+        }
+
+        function hideEnemyCastBar(interrupted = false, message = 'Interrupted') {
+            if (!enemyCastBarUI.container) return;
+            if (enemyCastBarUI.hideTimeout) {
+                clearTimeout(enemyCastBarUI.hideTimeout);
+                enemyCastBarUI.hideTimeout = null;
+            }
+
+            if (interrupted) {
+                enemyCastBarUI.container.classList.add('active');
+                enemyCastBarUI.container.classList.add('interrupted');
+                enemyCastBarUI.progress.style.width = '100%';
+                enemyCastBarUI.text.textContent = message;
+
+                enemyCastBarUI.hideTimeout = setTimeout(() => {
+                    enemyCastBarUI.container.classList.remove('active', 'interrupted');
+                    enemyCastBarUI.progress.style.width = '0%';
+                    enemyCastBarUI.text.textContent = 'Ready';
+                    enemyCastBarUI.hideTimeout = null;
+                }, 600);
+            } else {
+                enemyCastBarUI.container.classList.remove('active', 'interrupted');
+                enemyCastBarUI.progress.style.width = '0%';
+                enemyCastBarUI.text.textContent = 'Ready';
+            }
+        }
+
+        function interruptEnemyCast(reason) {
+            if (!gameState.enemy.isCasting) return;
+
+            const interruptedSpell = gameState.enemy.currentCast;
+            gameState.enemy.isCasting = false;
+            gameState.enemy.castTime = 0;
+            gameState.enemy.castDuration = 0;
+            gameState.enemy.castCost = 0;
+            gameState.enemy.currentCast = null;
+
+            const interruptionText = reason ? `Interrupted (${reason})` : 'Interrupted';
+            hideEnemyCastBar(true, interruptionText);
+
+            if (interruptedSpell) {
+                const logReason = reason ? ` (${reason})` : '';
+                addCombatMessage(`Frost Mage's ${interruptedSpell} was interrupted${logReason}!`, 'ability-use');
+            }
+        }
 
         function renderAbilities() {
             const abilitiesContainer = document.getElementById('abilities');
@@ -780,7 +920,15 @@
 
         // Enemy AI
         function updateEnemyAI(deltaTime) {
-            if (gameState.gameOver || gameState.enemy.health <= 0) return;
+            if (gameState.enemy.health <= 0) {
+                interruptEnemyCast('Dead');
+                return;
+            }
+
+            if (gameState.gameOver) {
+                interruptEnemyCast('Combat Ended');
+                return;
+            }
             
             const distance = gameState.enemy.position.distanceTo(gameState.player.position);
             const toPlayer = gameState.player.position.clone().sub(gameState.enemy.position).normalize();
@@ -790,15 +938,28 @@
             
             // Root duration
             if (gameState.enemy.isRooted) {
+                if (gameState.enemy.isCasting) {
+                    interruptEnemyCast('Rooted');
+                }
                 gameState.enemy.rootDuration -= deltaTime;
                 if (gameState.enemy.rootDuration <= 0) {
                     gameState.enemy.isRooted = false;
                 }
             }
-            
+
             // Handle casting
             if (gameState.enemy.isCasting) {
+                if (gameState.enemy.castCost > 0 && gameState.enemy.mana < gameState.enemy.castCost) {
+                    interruptEnemyCast('Out of Mana');
+                    return;
+                }
+
                 gameState.enemy.castTime -= deltaTime;
+
+                if (gameState.enemy.castDuration > 0) {
+                    updateEnemyCastBarProgress(gameState.enemy.castTime);
+                }
+
                 if (gameState.enemy.castTime <= 0) {
                     completeCast();
                 }
@@ -850,13 +1011,19 @@
                     addCombatMessage('Frost Mage casts Cone of Cold for 25 damage!', 'damage');
                 }
                 // Frostbolt as default
-                else if (gameState.enemy.mana >= 30 && !gameState.player.isStealthed) {
-                    gameState.enemy.isCasting = true;
-                    gameState.enemy.castTime = 2.5;
-                    gameState.enemy.currentCast = 'Frostbolt';
-                    addCombatMessage('Frost Mage begins casting Frostbolt...', 'ability-use');
+                else if (!gameState.player.isStealthed) {
+                    const frostbolt = gameState.enemy.abilities[0];
+                    if (frostbolt && gameState.enemy.mana >= (frostbolt.cost || 0) && frostbolt.castTime) {
+                        gameState.enemy.isCasting = true;
+                        gameState.enemy.castTime = frostbolt.castTime;
+                        gameState.enemy.castDuration = frostbolt.castTime;
+                        gameState.enemy.castCost = frostbolt.cost || 0;
+                        gameState.enemy.currentCast = frostbolt.name;
+                        showEnemyCastBar(frostbolt.name, frostbolt.castTime);
+                        addCombatMessage(`Frost Mage begins casting ${frostbolt.name}...`, 'ability-use');
+                    }
                 }
-                
+
                 gameState.enemy.lastAbilityTime = now;
             }
             
@@ -879,25 +1046,32 @@
         }
 
         function completeCast() {
+            const finishedSpell = gameState.enemy.currentCast;
+            const castCost = gameState.enemy.castCost || 0;
             gameState.enemy.isCasting = false;
-            
-            if (gameState.enemy.currentCast === 'Frostbolt') {
+
+            if (finishedSpell === 'Frostbolt') {
                 // Check if player evaded
                 if (gameState.player.buffs.evasion) {
                     addCombatMessage('Frostbolt missed! (Evasion)', 'buff');
                 } else {
                     const damage = 35;
                     gameState.player.health -= damage;
-                    gameState.enemy.mana -= 30;
+                    const manaCost = castCost > 0 ? castCost : 30;
+                    gameState.enemy.mana = Math.max(0, gameState.enemy.mana - manaCost);
                     createParticleEffect(gameState.player.position, 'frost');
                     addCombatMessage(`Frostbolt hits for ${damage} damage!`, 'damage');
-                    
+
                     // Slow effect
                     gameState.player.buffs.slow = 3;
                 }
             }
-            
+
+            gameState.enemy.castTime = 0;
+            gameState.enemy.castDuration = 0;
+            gameState.enemy.castCost = 0;
             gameState.enemy.currentCast = null;
+            hideEnemyCastBar();
         }
 
         // Update functions
@@ -1098,12 +1272,14 @@
             // Check win/lose conditions
             if (gameState.player.health <= 0 && !gameState.gameOver) {
                 gameState.gameOver = true;
+                interruptEnemyCast('Combat Ended');
                 const status = document.getElementById('gameStatus');
                 status.textContent = 'DEFEAT\nPress F5 to restart';
                 status.style.display = 'block';
                 status.style.color = '#ff4444';
             } else if (gameState.enemy.health <= 0 && !gameState.gameOver) {
                 gameState.gameOver = true;
+                interruptEnemyCast('Combat Ended');
                 const status = document.getElementById('gameStatus');
                 status.textContent = 'VICTORY!\nPress F5 to restart';
                 status.style.display = 'block';
