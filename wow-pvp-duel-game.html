@@ -522,32 +522,36 @@
                     }
                 ]
             },
-            enemy: {
-                position: new THREE.Vector3(0, 1, -10),
-                rotation: 0,
-                velocity: new THREE.Vector3(0, 0, 0),
-                health: 100,
-                maxHealth: 100,
-                mana: 100,
-                maxMana: 100,
-                isCasting: false,
-                castTime: 0,
-                castDuration: 0,
-                castCost: 0,
-                currentCast: null,
-                isRooted: false,
-                rootDuration: 0,
-                abilities: [
-                    { name: 'Frostbolt', cost: 30, damage: 35, castTime: 2.5, cooldown: 0 },
-                    { name: 'Frost Nova', cost: 40, damage: 15, cooldown: 0, maxCooldown: 20, isInstant: true },
-                    { name: 'Blink', cost: 20, cooldown: 0, maxCooldown: 15, isInstant: true },
-                    { name: 'Ice Barrier', cost: 50, cooldown: 0, maxCooldown: 30, shield: 40, isInstant: true },
-                    { name: 'Cone of Cold', cost: 35, damage: 25, cooldown: 0, maxCooldown: 8, isInstant: true }
-                ],
-                shield: 0,
-                aiState: 'aggressive',
-                lastAbilityTime: 0
-            },
+            enemies: [
+                {
+                    name: 'Frost Mage',
+                    position: new THREE.Vector3(0, 1, -10),
+                    rotation: 0,
+                    velocity: new THREE.Vector3(0, 0, 0),
+                    health: 100,
+                    maxHealth: 100,
+                    mana: 100,
+                    maxMana: 100,
+                    isCasting: false,
+                    castTime: 0,
+                    castDuration: 0,
+                    castCost: 0,
+                    currentCast: null,
+                    isRooted: false,
+                    rootDuration: 0,
+                    abilities: [
+                        { name: 'Frostbolt', cost: 30, damage: 35, castTime: 2.5, cooldown: 0 },
+                        { name: 'Frost Nova', cost: 40, damage: 15, cooldown: 0, maxCooldown: 20, isInstant: true },
+                        { name: 'Blink', cost: 20, cooldown: 0, maxCooldown: 15, isInstant: true },
+                        { name: 'Ice Barrier', cost: 50, cooldown: 0, maxCooldown: 30, shield: 40, isInstant: true },
+                        { name: 'Cone of Cold', cost: 35, damage: 25, cooldown: 0, maxCooldown: 8, isInstant: true }
+                    ],
+                    shield: 0,
+                    aiState: 'aggressive',
+                    lastAbilityTime: 0
+                }
+            ],
+            currentTarget: 0,
             camera: {
                 pitch: 0,
                 yaw: 0,
@@ -562,6 +566,54 @@
             gameOver: false,
             particles: []
         };
+
+        function getCurrentEnemy() {
+            return gameState.enemies[gameState.currentTarget] || null;
+        }
+
+        function getEnemyName(enemy = getCurrentEnemy()) {
+            return enemy?.name || 'Enemy';
+        }
+
+        function updateTargetIndicator() {
+            const targetIndicator = document.getElementById('targetIndicator');
+            if (!targetIndicator) return;
+
+            const enemy = getCurrentEnemy();
+            if (enemy && enemy.health > 0) {
+                targetIndicator.textContent = `Target: ${getEnemyName(enemy)}`;
+            } else {
+                targetIndicator.textContent = 'No Target';
+            }
+        }
+
+        function selectNextTarget() {
+            if (gameState.enemies.length === 0) {
+                updateTargetIndicator();
+                return;
+            }
+
+            const previousEnemy = getCurrentEnemy();
+            let nextIndex = gameState.currentTarget;
+            for (let i = 0; i < gameState.enemies.length; i++) {
+                nextIndex = (nextIndex + 1) % gameState.enemies.length;
+                const potentialTarget = gameState.enemies[nextIndex];
+                if (potentialTarget && potentialTarget.health > 0) {
+                    if (previousEnemy && previousEnemy !== potentialTarget) {
+                        interruptEnemyCast('Target Changed', previousEnemy);
+                    }
+                    gameState.currentTarget = nextIndex;
+                    updateTargetIndicator();
+                    return;
+                }
+            }
+
+            if (previousEnemy && previousEnemy.health <= 0) {
+                interruptEnemyCast('Target Changed', previousEnemy);
+            }
+
+            updateTargetIndicator();
+        }
 
         function setPlayerBuff(name, { duration = 0, icon = '', type = 'buff' } = {}) {
             gameState.player.buffs.set(name, {
@@ -608,7 +660,10 @@
 
         function updateEnemyCastBarProgress(remainingTime) {
             if (!enemyCastBarUI.container) return;
-            const duration = gameState.enemy.castDuration;
+            const enemy = getCurrentEnemy();
+            if (!enemy) return;
+
+            const duration = enemy.castDuration;
             if (duration <= 0) return;
 
             const clampedRemaining = Math.max(0, remainingTime);
@@ -616,7 +671,7 @@
             enemyCastBarUI.progress.style.width = `${(percent * 100).toFixed(2)}%`;
 
             const secondsText = clampedRemaining.toFixed(1);
-            enemyCastBarUI.text.textContent = `${gameState.enemy.currentCast} (${secondsText}s)`;
+            enemyCastBarUI.text.textContent = `${enemy.currentCast} (${secondsText}s)`;
         }
 
         function hideEnemyCastBar(interrupted = false, message = 'Interrupted') {
@@ -645,22 +700,23 @@
             }
         }
 
-        function interruptEnemyCast(reason) {
-            if (!gameState.enemy.isCasting) return;
+        function interruptEnemyCast(reason, enemyOverride = getCurrentEnemy()) {
+            const enemy = enemyOverride;
+            if (!enemy || !enemy.isCasting) return;
 
-            const interruptedSpell = gameState.enemy.currentCast;
-            gameState.enemy.isCasting = false;
-            gameState.enemy.castTime = 0;
-            gameState.enemy.castDuration = 0;
-            gameState.enemy.castCost = 0;
-            gameState.enemy.currentCast = null;
+            const interruptedSpell = enemy.currentCast;
+            enemy.isCasting = false;
+            enemy.castTime = 0;
+            enemy.castDuration = 0;
+            enemy.castCost = 0;
+            enemy.currentCast = null;
 
             const interruptionText = reason ? `Interrupted (${reason})` : 'Interrupted';
             hideEnemyCastBar(true, interruptionText);
 
             if (interruptedSpell) {
                 const logReason = reason ? ` (${reason})` : '';
-                addCombatMessage(`Frost Mage's ${interruptedSpell} was interrupted${logReason}!`, 'ability-use');
+                addCombatMessage(`${getEnemyName(enemy)}'s ${interruptedSpell} was interrupted${logReason}!`, 'ability-use');
             }
         }
 
@@ -830,7 +886,14 @@
 
         // Input handling
         document.addEventListener('keydown', (e) => {
-            gameState.input.keys[e.key.toLowerCase()] = true;
+            const key = e.key.toLowerCase();
+            gameState.input.keys[key] = true;
+
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                selectNextTarget();
+                return;
+            }
 
             // Ability usage
             if (e.key >= '1' && e.key <= '6') {
@@ -878,10 +941,16 @@
         // Ability system
         function usePlayerAbility(index) {
             if (gameState.gameOver) return;
-            
+
             const ability = gameState.player.abilities[index];
             if (!ability) return;
-            
+
+            const enemy = getCurrentEnemy();
+            if (!enemy) {
+                addCombatMessage('No target selected!', 'ability-use');
+                return;
+            }
+
             // Check cooldown
             if (ability.cooldown > 0) {
                 addCombatMessage(`${ability.name} is on cooldown!`, 'ability-use');
@@ -899,19 +968,19 @@
                 addCombatMessage(`${ability.name} requires stealth!`, 'ability-use');
                 return;
             }
-            
+
             if (ability.requiresBehind) {
-                const toEnemy = gameState.enemy.position.clone().sub(gameState.player.position).normalize();
-                const enemyFacing = new THREE.Vector3(Math.sin(gameState.enemy.rotation), 0, Math.cos(gameState.enemy.rotation));
+                const toEnemy = enemy.position.clone().sub(gameState.player.position).normalize();
+                const enemyFacing = new THREE.Vector3(Math.sin(enemy.rotation), 0, Math.cos(enemy.rotation));
                 const dotProduct = toEnemy.dot(enemyFacing);
                 if (dotProduct < 0.5) {
                     addCombatMessage('Must be behind target!', 'ability-use');
                     return;
                 }
             }
-            
-            const distance = gameState.player.position.distanceTo(gameState.enemy.position);
-            
+
+            const distance = gameState.player.position.distanceTo(enemy.position);
+
             // Execute ability
             switch (ability.name) {
                 case 'Stealth':
@@ -954,27 +1023,27 @@
                         addCombatMessage('Too far from target!', 'ability-use');
                         return;
                     }
-                    
+
                     let damage = ability.damage || 0;
-                    
+
                     // Ambush and Backstab get bonus from stealth
                     if ((ability.name === 'Ambush' || ability.name === 'Backstab') && gameState.player.isStealthed) {
                         damage *= 1.5;
                     }
-                    
-                    if (gameState.enemy.shield > 0) {
-                        const shieldDamage = Math.min(damage, gameState.enemy.shield);
-                        gameState.enemy.shield -= shieldDamage;
+
+                    if (enemy.shield > 0) {
+                        const shieldDamage = Math.min(damage, enemy.shield);
+                        enemy.shield -= shieldDamage;
                         damage -= shieldDamage;
-                        if (gameState.enemy.shield <= 0) {
+                        if (enemy.shield <= 0) {
                             addCombatMessage('Ice Barrier broken!', 'damage');
                         }
                     }
-                    
-                    gameState.enemy.health -= damage;
-                    createParticleEffect(gameState.enemy.position, 'damage');
+
+                    enemy.health -= damage;
+                    createParticleEffect(enemy.position, 'damage');
                     addCombatMessage(`${ability.name} hits for ${Math.round(damage)} damage!`, 'damage');
-                    
+
                     // Break stealth on damage
                     if (gameState.player.isStealthed) {
                         removePlayerBuff('stealth');
@@ -987,13 +1056,20 @@
             if (ability.maxCooldown) {
                 ability.cooldown = ability.maxCooldown;
             }
-            
+
             updateUI();
         }
 
         // Enemy AI
         function updateEnemyAI(deltaTime) {
-            if (gameState.enemy.health <= 0) {
+            const enemy = getCurrentEnemy();
+            if (!enemy) {
+                hideEnemyCastBar();
+                return;
+            }
+
+            if (enemy.health <= 0) {
+                enemy.velocity.set(0, 0, 0);
                 interruptEnemyCast('Dead');
                 return;
             }
@@ -1002,126 +1078,129 @@
                 interruptEnemyCast('Combat Ended');
                 return;
             }
-            
-            const distance = gameState.enemy.position.distanceTo(gameState.player.position);
-            const toPlayer = gameState.player.position.clone().sub(gameState.enemy.position).normalize();
-            
+
+            const distance = enemy.position.distanceTo(gameState.player.position);
+            const toPlayer = gameState.player.position.clone().sub(enemy.position).normalize();
+
             // Face the player
-            gameState.enemy.rotation = Math.atan2(toPlayer.x, toPlayer.z);
-            
+            enemy.rotation = Math.atan2(toPlayer.x, toPlayer.z);
+
             // Root duration
-            if (gameState.enemy.isRooted) {
-                if (gameState.enemy.isCasting) {
+            if (enemy.isRooted) {
+                if (enemy.isCasting) {
                     interruptEnemyCast('Rooted');
                 }
-                gameState.enemy.rootDuration -= deltaTime;
-                if (gameState.enemy.rootDuration <= 0) {
-                    gameState.enemy.isRooted = false;
+                enemy.rootDuration -= deltaTime;
+                if (enemy.rootDuration <= 0) {
+                    enemy.isRooted = false;
                 }
             }
 
             // Handle casting
-            if (gameState.enemy.isCasting) {
-                if (gameState.enemy.castCost > 0 && gameState.enemy.mana < gameState.enemy.castCost) {
+            if (enemy.isCasting) {
+                if (enemy.castCost > 0 && enemy.mana < enemy.castCost) {
                     interruptEnemyCast('Out of Mana');
                     return;
                 }
 
-                gameState.enemy.castTime -= deltaTime;
+                enemy.castTime -= deltaTime;
 
-                if (gameState.enemy.castDuration > 0) {
-                    updateEnemyCastBarProgress(gameState.enemy.castTime);
+                if (enemy.castDuration > 0) {
+                    updateEnemyCastBarProgress(enemy.castTime);
                 }
 
-                if (gameState.enemy.castTime <= 0) {
+                if (enemy.castTime <= 0) {
                     completeCast();
                 }
                 return;
             }
-            
+
             // Ability usage logic
             const now = Date.now() / 1000;
-            if (now - gameState.enemy.lastAbilityTime > 1) { // AI thinks every second
-                
+            if (now - enemy.lastAbilityTime > 1) { // AI thinks every second
+
                 // Ice Barrier when low health
-                if (gameState.enemy.health < 40 && gameState.enemy.abilities[3].cooldown <= 0 && gameState.enemy.mana >= 50) {
-                    gameState.enemy.shield = 40;
-                    gameState.enemy.mana -= 50;
-                    gameState.enemy.abilities[3].cooldown = gameState.enemy.abilities[3].maxCooldown;
-                    addCombatMessage('Frost Mage casts Ice Barrier!', 'buff');
-                    createParticleEffect(gameState.enemy.position, 'frost');
+                if (enemy.health < 40 && enemy.abilities[3].cooldown <= 0 && enemy.mana >= 50) {
+                    enemy.shield = 40;
+                    enemy.mana -= 50;
+                    enemy.abilities[3].cooldown = enemy.abilities[3].maxCooldown;
+                    addCombatMessage(`${getEnemyName(enemy)} casts Ice Barrier!`, 'buff');
+                    createParticleEffect(enemy.position, 'frost');
                 }
                 // Frost Nova when player is close
-                else if (distance < 5 && gameState.enemy.abilities[1].cooldown <= 0 && gameState.enemy.mana >= 40) {
+                else if (distance < 5 && enemy.abilities[1].cooldown <= 0 && enemy.mana >= 40) {
                     // Frost Nova
                     gameState.player.velocity.set(0, 0, 0);
                     gameState.player.isRooted = true;
                     gameState.player.rootDuration = 3;
                     gameState.player.health -= 15;
-                    gameState.enemy.mana -= 40;
-                    gameState.enemy.abilities[1].cooldown = gameState.enemy.abilities[1].maxCooldown;
+                    enemy.mana -= 40;
+                    enemy.abilities[1].cooldown = enemy.abilities[1].maxCooldown;
                     createParticleEffect(gameState.player.position, 'frost');
-                    addCombatMessage('Frost Mage casts Frost Nova! You are frozen!', 'damage');
-                    
+                    addCombatMessage(`${getEnemyName(enemy)} casts Frost Nova! You are frozen!`, 'damage');
+
                     // Blink away after nova
                     setTimeout(() => {
-                        if (gameState.enemy.abilities[2].cooldown <= 0 && gameState.enemy.mana >= 20) {
+                        if (enemy.abilities[2].cooldown <= 0 && enemy.mana >= 20) {
                             const blinkDirection = toPlayer.clone().multiplyScalar(-15);
-                            gameState.enemy.position.add(blinkDirection);
-                            gameState.enemy.mana -= 20;
-                            gameState.enemy.abilities[2].cooldown = gameState.enemy.abilities[2].maxCooldown;
-                            addCombatMessage('Frost Mage blinks away!', 'ability-use');
-                            createParticleEffect(gameState.enemy.position, 'frost');
+                            enemy.position.add(blinkDirection);
+                            enemy.mana -= 20;
+                            enemy.abilities[2].cooldown = enemy.abilities[2].maxCooldown;
+                            addCombatMessage(`${getEnemyName(enemy)} blinks away!`, 'ability-use');
+                            createParticleEffect(enemy.position, 'frost');
                         }
                     }, 100);
                 }
                 // Cone of Cold at mid range
-                else if (distance < 8 && distance > 3 && gameState.enemy.abilities[4].cooldown <= 0 && gameState.enemy.mana >= 35) {
+                else if (distance < 8 && distance > 3 && enemy.abilities[4].cooldown <= 0 && enemy.mana >= 35) {
                     gameState.player.health -= 25;
-                    gameState.enemy.mana -= 35;
-                    gameState.enemy.abilities[4].cooldown = gameState.enemy.abilities[4].maxCooldown;
+                    enemy.mana -= 35;
+                    enemy.abilities[4].cooldown = enemy.abilities[4].maxCooldown;
                     createParticleEffect(gameState.player.position, 'frost');
-                    addCombatMessage('Frost Mage casts Cone of Cold for 25 damage!', 'damage');
+                    addCombatMessage(`${getEnemyName(enemy)} casts Cone of Cold for 25 damage!`, 'damage');
                 }
                 // Frostbolt as default
                 else if (!gameState.player.isStealthed) {
-                    const frostbolt = gameState.enemy.abilities[0];
-                    if (frostbolt && gameState.enemy.mana >= (frostbolt.cost || 0) && frostbolt.castTime) {
-                        gameState.enemy.isCasting = true;
-                        gameState.enemy.castTime = frostbolt.castTime;
-                        gameState.enemy.castDuration = frostbolt.castTime;
-                        gameState.enemy.castCost = frostbolt.cost || 0;
-                        gameState.enemy.currentCast = frostbolt.name;
+                    const frostbolt = enemy.abilities[0];
+                    if (frostbolt && enemy.mana >= (frostbolt.cost || 0) && frostbolt.castTime) {
+                        enemy.isCasting = true;
+                        enemy.castTime = frostbolt.castTime;
+                        enemy.castDuration = frostbolt.castTime;
+                        enemy.castCost = frostbolt.cost || 0;
+                        enemy.currentCast = frostbolt.name;
                         showEnemyCastBar(frostbolt.name, frostbolt.castTime);
-                        addCombatMessage(`Frost Mage begins casting ${frostbolt.name}...`, 'ability-use');
+                        addCombatMessage(`${getEnemyName(enemy)} begins casting ${frostbolt.name}...`, 'ability-use');
                     }
                 }
 
-                gameState.enemy.lastAbilityTime = now;
+                enemy.lastAbilityTime = now;
             }
-            
+
             // Movement
-            if (!gameState.enemy.isRooted && !gameState.enemy.isCasting) {
+            if (!enemy.isRooted && !enemy.isCasting) {
                 if (distance > 20) {
                     // Move closer
-                    gameState.enemy.velocity = toPlayer.clone().multiplyScalar(3);
+                    enemy.velocity = toPlayer.clone().multiplyScalar(3);
                 } else if (distance < 8) {
                     // Kite away
-                    gameState.enemy.velocity = toPlayer.clone().multiplyScalar(-2);
+                    enemy.velocity = toPlayer.clone().multiplyScalar(-2);
                 } else {
                     // Strafe
                     const strafe = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
-                    gameState.enemy.velocity = strafe.multiplyScalar(Math.sin(now * 2) * 2);
+                    enemy.velocity = strafe.multiplyScalar(Math.sin(now * 2) * 2);
                 }
             } else {
-                gameState.enemy.velocity.set(0, 0, 0);
+                enemy.velocity.set(0, 0, 0);
             }
         }
 
         function completeCast() {
-            const finishedSpell = gameState.enemy.currentCast;
-            const castCost = gameState.enemy.castCost || 0;
-            gameState.enemy.isCasting = false;
+            const enemy = getCurrentEnemy();
+            if (!enemy) return;
+
+            const finishedSpell = enemy.currentCast;
+            const castCost = enemy.castCost || 0;
+            enemy.isCasting = false;
 
             if (finishedSpell === 'Frostbolt') {
                 // Check if player evaded
@@ -1131,7 +1210,7 @@
                     const damage = 35;
                     gameState.player.health -= damage;
                     const manaCost = castCost > 0 ? castCost : 30;
-                    gameState.enemy.mana = Math.max(0, gameState.enemy.mana - manaCost);
+                    enemy.mana = Math.max(0, enemy.mana - manaCost);
                     createParticleEffect(gameState.player.position, 'frost');
                     addCombatMessage(`Frostbolt hits for ${damage} damage!`, 'damage');
 
@@ -1144,10 +1223,10 @@
                 }
             }
 
-            gameState.enemy.castTime = 0;
-            gameState.enemy.castDuration = 0;
-            gameState.enemy.castCost = 0;
-            gameState.enemy.currentCast = null;
+            enemy.castTime = 0;
+            enemy.castDuration = 0;
+            enemy.castCost = 0;
+            enemy.currentCast = null;
             hideEnemyCastBar();
         }
 
@@ -1244,26 +1323,33 @@
         }
 
         function updateEnemy(deltaTime) {
-            // Update position
-            gameState.enemy.position.add(gameState.enemy.velocity.clone().multiplyScalar(deltaTime));
-            
-            // Arena bounds
-            const distFromCenter = Math.sqrt(gameState.enemy.position.x ** 2 + gameState.enemy.position.z ** 2);
-            if (distFromCenter > 28) {
-                const dir = new THREE.Vector3(gameState.enemy.position.x, 0, gameState.enemy.position.z).normalize();
-                gameState.enemy.position.x = dir.x * 28;
-                gameState.enemy.position.z = dir.z * 28;
+            const enemy = getCurrentEnemy();
+            if (!enemy) {
+                enemyMesh.visible = false;
+                return;
             }
-            
+
+            // Update position
+            enemy.position.add(enemy.velocity.clone().multiplyScalar(deltaTime));
+
+            // Arena bounds
+            const distFromCenter = Math.sqrt(enemy.position.x ** 2 + enemy.position.z ** 2);
+            if (distFromCenter > 28) {
+                const dir = new THREE.Vector3(enemy.position.x, 0, enemy.position.z).normalize();
+                enemy.position.x = dir.x * 28;
+                enemy.position.z = dir.z * 28;
+            }
+
             // Update mesh
-            enemyMesh.position.copy(gameState.enemy.position);
-            enemyMesh.rotation.y = gameState.enemy.rotation;
-            
+            enemyMesh.visible = true;
+            enemyMesh.position.copy(enemy.position);
+            enemyMesh.rotation.y = enemy.rotation;
+
             // Mana regeneration
-            gameState.enemy.mana = Math.min(gameState.enemy.maxMana, gameState.enemy.mana + 10 * deltaTime);
-            
+            enemy.mana = Math.min(enemy.maxMana, enemy.mana + 10 * deltaTime);
+
             // Update ability cooldowns
-            gameState.enemy.abilities.forEach(ability => {
+            enemy.abilities.forEach(ability => {
                 if (ability.cooldown > 0) {
                     ability.cooldown -= deltaTime;
                     if (ability.cooldown < 0) ability.cooldown = 0;
@@ -1288,29 +1374,34 @@
             const playerHealthBar = document.querySelector('#playerHealth .health-bar');
             const playerHealthPercent = Math.max(0, gameState.player.health / gameState.player.maxHealth * 100);
             playerHealthBar.style.width = playerHealthPercent + '%';
-            document.getElementById('playerHpText').textContent = 
+            document.getElementById('playerHpText').textContent =
                 `${Math.max(0, Math.round(gameState.player.health))}/${gameState.player.maxHealth}`;
-            
+
             // Player energy
             const playerEnergyBar = document.querySelector('#playerEnergy .energy-bar');
             const playerEnergyPercent = gameState.player.energy / gameState.player.maxEnergy * 100;
             playerEnergyBar.style.width = playerEnergyPercent + '%';
-            document.getElementById('playerEnergyText').textContent = 
+            document.getElementById('playerEnergyText').textContent =
                 `${Math.round(gameState.player.energy)}/${gameState.player.maxEnergy}`;
-            
+
             // Enemy health
             const enemyHealthBar = document.querySelector('#enemyHealth .health-bar');
-            const enemyHealthPercent = Math.max(0, gameState.enemy.health / gameState.enemy.maxHealth * 100);
+            const enemy = getCurrentEnemy();
+            const enemyHealthPercent = enemy ? Math.max(0, enemy.health / enemy.maxHealth * 100) : 0;
             enemyHealthBar.style.width = enemyHealthPercent + '%';
-            document.getElementById('enemyHpText').textContent = 
-                `${Math.max(0, Math.round(gameState.enemy.health))}/${gameState.enemy.maxHealth}`;
-            
+            document.getElementById('enemyHpText').textContent = enemy
+                ? `${Math.max(0, Math.round(enemy.health))}/${enemy.maxHealth}`
+                : '0/0';
+
             // Enemy mana
             const enemyManaBar = document.querySelector('#enemyMana .mana-bar');
-            const enemyManaPercent = gameState.enemy.mana / gameState.enemy.maxMana * 100;
+            const enemyManaPercent = enemy ? enemy.mana / enemy.maxMana * 100 : 0;
             enemyManaBar.style.width = enemyManaPercent + '%';
-            document.getElementById('enemyManaText').textContent =
-                `${Math.round(gameState.enemy.mana)}/${gameState.enemy.maxMana}`;
+            document.getElementById('enemyManaText').textContent = enemy
+                ? `${Math.round(enemy.mana)}/${enemy.maxMana}`
+                : '0/0';
+
+            updateTargetIndicator();
 
             // Player buffs
             const buffContainer = document.getElementById('playerBuffs');
@@ -1372,13 +1463,18 @@
                 status.textContent = 'DEFEAT\nPress F5 to restart';
                 status.style.display = 'block';
                 status.style.color = '#ff4444';
-            } else if (gameState.enemy.health <= 0 && !gameState.gameOver) {
+            } else {
+                const allEnemiesDefeated = gameState.enemies.length > 0 &&
+                    gameState.enemies.every(enemyState => enemyState.health <= 0);
+
+                if (allEnemiesDefeated && !gameState.gameOver) {
                 gameState.gameOver = true;
                 interruptEnemyCast('Combat Ended');
                 const status = document.getElementById('gameStatus');
                 status.textContent = 'VICTORY!\nPress F5 to restart';
                 status.style.display = 'block';
                 status.style.color = '#44ff44';
+                }
             }
         }
 
@@ -1414,6 +1510,7 @@
 
         // UI initialization
         initializeAbilityUI();
+        updateTargetIndicator();
 
         // Start messages
         addCombatMessage('Duel begins!', 'buff');
