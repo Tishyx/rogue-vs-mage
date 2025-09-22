@@ -349,6 +349,99 @@
             text-align: center;
         }
 
+        #overlayContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.65);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+            pointer-events: none;
+        }
+
+        #overlayContainer.active {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        #overlayContainer .overlay-content {
+            background: rgba(12, 12, 20, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 30px 40px;
+            text-align: center;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+            min-width: 320px;
+        }
+
+        #overlayContainer .overlay-title {
+            font-size: 36px;
+            margin-bottom: 10px;
+            color: #f5f5f5;
+            text-shadow: 0 3px 8px rgba(0, 0, 0, 0.7);
+        }
+
+        #overlayContainer.victory .overlay-title {
+            color: #44ff44;
+        }
+
+        #overlayContainer.defeat .overlay-title {
+            color: #ff5555;
+        }
+
+        #overlayContainer.paused .overlay-title {
+            color: #ffeb3b;
+        }
+
+        #overlayContainer .overlay-subtitle {
+            font-size: 16px;
+            color: #d0d4ff;
+            margin-bottom: 24px;
+            line-height: 1.4;
+            white-space: pre-line;
+        }
+
+        .overlay-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .overlay-button {
+            padding: 12px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #3f51b5, #5c6bc0);
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+
+        .overlay-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+            filter: brightness(1.1);
+        }
+
+        .overlay-button:active {
+            transform: translateY(0);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        .overlay-button.secondary {
+            background: linear-gradient(135deg, #009688, #26a69a);
+        }
+
         #controls {
             position: absolute;
             top: 100px;
@@ -451,7 +544,7 @@
         <div id="abilities"></div>
         
         <div id="combatLog"></div>
-        
+
         <div id="controls">
             <div class="control-item"><strong>Movement:</strong> WASD</div>
             <div class="control-item"><strong>Camera:</strong> Mouse</div>
@@ -459,7 +552,18 @@
             <div class="control-item"><strong>Abilities:</strong> 1-7</div>
             <div class="control-item"><strong>Target:</strong> Tab</div>
         </div>
-        
+
+        <div id="overlayContainer">
+            <div class="overlay-content">
+                <div class="overlay-title" id="overlayTitle">Game Paused</div>
+                <div class="overlay-subtitle" id="overlaySubtitle">Press Escape to resume.</div>
+                <div class="overlay-buttons">
+                    <button type="button" id="resumeButton" class="overlay-button secondary">Resume Duel</button>
+                    <button type="button" id="restartButton" class="overlay-button">Restart Duel</button>
+                </div>
+            </div>
+        </div>
+
         <div id="gameStatus"></div>
     </div>
 
@@ -634,7 +738,50 @@
                 mouseY: 0
             },
             gameOver: false,
+            isPaused: false,
+            outcome: null,
+            overlayMessage: null,
             particles: []
+        };
+
+        const initialPlayerState = {
+            position: gameState.player.position.clone(),
+            rotation: gameState.player.rotation,
+            health: gameState.player.maxHealth,
+            maxHealth: gameState.player.maxHealth,
+            energy: gameState.player.maxEnergy,
+            maxEnergy: gameState.player.maxEnergy,
+            comboPoints: 0,
+            isStealthed: false,
+            isRooted: false,
+            rootDuration: 0,
+            inCombat: false
+        };
+
+        const initialEnemyStates = gameState.enemies.map(enemy => ({
+            position: enemy.position.clone(),
+            rotation: enemy.rotation,
+            maxHealth: enemy.maxHealth,
+            maxMana: enemy.maxMana,
+            aiState: enemy.aiState,
+            awareness: enemy.awareness,
+            detectCooldown: enemy.detectCooldown,
+            searchTimer: enemy.searchTimer,
+            patrolAngle: enemy.patrolAngle
+        }));
+
+        const initialCameraState = {
+            pitch: gameState.camera.pitch,
+            yaw: gameState.camera.yaw,
+            distance: gameState.camera.distance,
+            targetDistance: gameState.camera.targetDistance,
+            minDistance: gameState.camera.minDistance,
+            maxDistance: gameState.camera.maxDistance,
+            zoomSpeed: gameState.camera.zoomSpeed,
+            height: gameState.camera.height,
+            targetHeight: gameState.camera.targetHeight,
+            heightRatio: gameState.camera.heightRatio,
+            defaultDistance: gameState.camera.defaultDistance
         };
 
         function getCurrentEnemy() {
@@ -713,10 +860,165 @@
             hideTimeout: null
         };
 
+        const activeTimeouts = new Set();
+
+        function scheduleTimeout(callback, delay) {
+            const timeoutId = setTimeout(() => {
+                activeTimeouts.delete(timeoutId);
+                callback();
+            }, delay);
+            activeTimeouts.add(timeoutId);
+            return timeoutId;
+        }
+
+        function cancelTrackedTimeout(timeoutId) {
+            if (!timeoutId && timeoutId !== 0) return;
+            clearTimeout(timeoutId);
+            activeTimeouts.delete(timeoutId);
+        }
+
+        function clearAllTrackedTimeouts() {
+            activeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+            activeTimeouts.clear();
+        }
+
+        const overlayUI = {
+            container: document.getElementById('overlayContainer'),
+            title: document.getElementById('overlayTitle'),
+            subtitle: document.getElementById('overlaySubtitle'),
+            restartButton: document.getElementById('restartButton'),
+            resumeButton: document.getElementById('resumeButton')
+        };
+
+        function setOverlayActive(active) {
+            if (!overlayUI.container) return;
+            if (active) {
+                if (!overlayUI.container.classList.contains('active')) {
+                    overlayUI.container.classList.add('active');
+                }
+                if (document.pointerLockElement === document.body) {
+                    document.exitPointerLock();
+                }
+            } else {
+                overlayUI.container.classList.remove('active');
+            }
+        }
+
+        function updateOverlay(override) {
+            if (!overlayUI.container) return;
+
+            let state = override?.state || null;
+            if (!state) {
+                if (gameState.gameOver) {
+                    state = gameState.outcome || 'defeat';
+                } else if (gameState.isPaused) {
+                    state = 'paused';
+                }
+            }
+
+            if (!state) {
+                overlayUI.container.classList.remove('victory', 'defeat', 'paused');
+                if (overlayUI.subtitle) {
+                    overlayUI.subtitle.textContent = '';
+                }
+                setOverlayActive(false);
+                return;
+            }
+
+            overlayUI.container.classList.remove('victory', 'defeat', 'paused');
+            overlayUI.container.classList.add(state);
+
+            let title = override?.title;
+            let subtitle = override?.subtitle;
+            let showRestart = override?.showRestart;
+            let showResume = override?.showResume;
+
+            if (!override) {
+                if (state === 'paused') {
+                    title = 'Game Paused';
+                    subtitle = 'Press Escape or click resume to continue.';
+                    showRestart = true;
+                    showResume = true;
+                } else {
+                    const message = gameState.overlayMessage;
+                    if (message) {
+                        title = message.title;
+                        subtitle = message.subtitle;
+                    } else if (state === 'victory') {
+                        title = 'Victory!';
+                        subtitle = 'All enemies defeated. Click restart to duel again.';
+                    } else if (state === 'defeat') {
+                        title = 'Defeat';
+                        subtitle = 'You were defeated. Click restart to try again.';
+                    }
+                    showRestart = true;
+                    showResume = false;
+                }
+            } else {
+                if (typeof showRestart === 'undefined') {
+                    showRestart = true;
+                }
+                if (typeof showResume === 'undefined') {
+                    showResume = state === 'paused';
+                }
+            }
+
+            if (overlayUI.title) {
+                overlayUI.title.textContent = title || '';
+            }
+            if (overlayUI.subtitle) {
+                overlayUI.subtitle.textContent = subtitle || '';
+            }
+
+            if (overlayUI.restartButton) {
+                overlayUI.restartButton.style.display = showRestart ? 'block' : 'none';
+            }
+            if (overlayUI.resumeButton) {
+                overlayUI.resumeButton.style.display = showResume ? 'block' : 'none';
+            }
+
+            setOverlayActive(true);
+        }
+
+        if (overlayUI.restartButton) {
+            overlayUI.restartButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                resetGameState();
+            });
+        }
+
+        if (overlayUI.resumeButton) {
+            overlayUI.resumeButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                togglePause(false);
+            });
+        }
+
+        function togglePause(forceState) {
+            if (gameState.gameOver) {
+                return;
+            }
+
+            const desiredState = typeof forceState === 'boolean' ? forceState : !gameState.isPaused;
+            if (gameState.isPaused === desiredState) {
+                updateOverlay();
+                return;
+            }
+
+            gameState.isPaused = desiredState;
+
+            if (gameState.isPaused) {
+                gameState.input.keys = {};
+            } else {
+                lastTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            }
+
+            updateUI();
+        }
         function showEnemyCastBar(spellName, duration) {
             if (!enemyCastBarUI.container) return;
             if (enemyCastBarUI.hideTimeout) {
-                clearTimeout(enemyCastBarUI.hideTimeout);
+                cancelTrackedTimeout(enemyCastBarUI.hideTimeout);
                 enemyCastBarUI.hideTimeout = null;
             }
 
@@ -747,7 +1049,7 @@
         function hideEnemyCastBar(interrupted = false, message = 'Interrupted') {
             if (!enemyCastBarUI.container) return;
             if (enemyCastBarUI.hideTimeout) {
-                clearTimeout(enemyCastBarUI.hideTimeout);
+                cancelTrackedTimeout(enemyCastBarUI.hideTimeout);
                 enemyCastBarUI.hideTimeout = null;
             }
 
@@ -757,7 +1059,7 @@
                 enemyCastBarUI.progress.style.width = '100%';
                 enemyCastBarUI.text.textContent = message;
 
-                enemyCastBarUI.hideTimeout = setTimeout(() => {
+                enemyCastBarUI.hideTimeout = scheduleTimeout(() => {
                     enemyCastBarUI.container.classList.remove('active', 'interrupted');
                     enemyCastBarUI.progress.style.width = '0%';
                     enemyCastBarUI.text.textContent = 'Ready';
@@ -956,14 +1258,26 @@
 
         // Input handling
         document.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
-            gameState.input.keys[key] = true;
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                if (!gameState.gameOver) {
+                    togglePause();
+                }
+                return;
+            }
+
+            if (gameState.isPaused || gameState.gameOver) {
+                return;
+            }
 
             if (e.key === 'Tab') {
                 e.preventDefault();
                 selectNextTarget();
                 return;
             }
+
+            const key = e.key.toLowerCase();
+            gameState.input.keys[key] = true;
 
             // Ability usage
             if (e.key >= '1' && e.key <= '9') {
@@ -1025,6 +1339,10 @@
         }, { passive: false });
 
         document.addEventListener('click', (event) => {
+            if (gameState.isPaused || gameState.gameOver) {
+                return;
+            }
+
             if (event.target.closest('.ability')) {
                 return;
             }
@@ -1036,7 +1354,7 @@
 
         // Ability system
         function usePlayerAbility(index) {
-            if (gameState.gameOver) return;
+            if (gameState.gameOver || gameState.isPaused) return;
 
             const ability = gameState.player.abilities[index];
             if (!ability) return;
@@ -1333,7 +1651,7 @@
                         addCombatMessage(`${getEnemyName(enemy)} casts Frost Nova! You are frozen!`, 'damage');
 
                         // Blink away after nova
-                        setTimeout(() => {
+                        scheduleTimeout(() => {
                             if (enemy.abilities[2].cooldown <= 0 && enemy.mana >= 20) {
                                 const blinkDirection = directionToPlayer.clone().multiplyScalar(-15);
                                 enemy.position.add(blinkDirection);
@@ -1603,6 +1921,144 @@
             camera.lookAt(gameState.player.position.clone().add(new THREE.Vector3(0, 2, 0)));
         }
 
+        function resetGameState() {
+            clearAllTrackedTimeouts();
+            hideEnemyCastBar();
+            enemyCastBarUI.hideTimeout = null;
+
+            gameState.gameOver = false;
+            gameState.isPaused = false;
+            gameState.outcome = null;
+            gameState.overlayMessage = null;
+
+            gameState.player.position.copy(initialPlayerState.position);
+            gameState.player.rotation = initialPlayerState.rotation;
+            gameState.player.velocity.set(0, 0, 0);
+            gameState.player.maxHealth = initialPlayerState.maxHealth;
+            gameState.player.health = initialPlayerState.maxHealth;
+            gameState.player.maxEnergy = initialPlayerState.maxEnergy;
+            gameState.player.energy = initialPlayerState.maxEnergy;
+            gameState.player.comboPoints = initialPlayerState.comboPoints;
+            gameState.player.isStealthed = initialPlayerState.isStealthed;
+            gameState.player.isRooted = initialPlayerState.isRooted;
+            gameState.player.rootDuration = initialPlayerState.rootDuration;
+            gameState.player.inCombat = initialPlayerState.inCombat;
+            gameState.player.buffs = new Map();
+
+            gameState.player.abilities.forEach(ability => {
+                ability.cooldown = 0;
+            });
+
+            playerMaterial.opacity = 1;
+            playerMaterial.transparent = false;
+
+            playerMesh.position.copy(gameState.player.position);
+            playerMesh.rotation.y = gameState.player.rotation;
+
+            const comboContainer = document.getElementById('comboPoints');
+            if (comboContainer) {
+                comboContainer.classList.remove('combo-change');
+                if (comboContainer._comboTimeout) {
+                    cancelTrackedTimeout(comboContainer._comboTimeout);
+                    comboContainer._comboTimeout = null;
+                }
+                delete comboContainer.dataset.points;
+                comboContainer.innerHTML = '';
+            }
+
+            gameState.enemies.forEach((enemy, index) => {
+                const initialEnemy = initialEnemyStates[index];
+                if (!initialEnemy) return;
+
+                enemy.position.copy(initialEnemy.position);
+                enemy.rotation = initialEnemy.rotation;
+                if (enemy.velocity) {
+                    enemy.velocity.set(0, 0, 0);
+                } else {
+                    enemy.velocity = new THREE.Vector3(0, 0, 0);
+                }
+                enemy.health = initialEnemy.maxHealth;
+                enemy.maxHealth = initialEnemy.maxHealth;
+                enemy.mana = initialEnemy.maxMana;
+                enemy.maxMana = initialEnemy.maxMana;
+                enemy.shield = 0;
+                enemy.isCasting = false;
+                enemy.castTime = 0;
+                enemy.castDuration = 0;
+                enemy.castCost = 0;
+                enemy.currentCast = null;
+                enemy.isRooted = false;
+                enemy.rootDuration = 0;
+                enemy.aiState = initialEnemy.aiState;
+                enemy.awareness = initialEnemy.awareness;
+                enemy.detectCooldown = initialEnemy.detectCooldown;
+                enemy.searchTimer = initialEnemy.searchTimer;
+                enemy.patrolAngle = initialEnemy.patrolAngle;
+                enemy.lastAbilityTime = 0;
+                enemy.lastKnownPlayerPos = null;
+                enemy.abilities.forEach(ability => {
+                    ability.cooldown = 0;
+                });
+            });
+
+            if (gameState.enemies.length > 0) {
+                const firstEnemy = gameState.enemies[0];
+                enemyMesh.visible = true;
+                enemyMesh.position.copy(firstEnemy.position);
+                enemyMesh.rotation.y = firstEnemy.rotation;
+            }
+
+            gameState.currentTarget = 0;
+            updateTargetIndicator();
+
+            if (gameState.particles.length) {
+                gameState.particles.forEach(particle => {
+                    if (particle?.mesh) {
+                        scene.remove(particle.mesh);
+                    }
+                });
+                gameState.particles = [];
+            }
+
+            gameState.input.keys = {};
+
+            const combatLog = document.getElementById('combatLog');
+            if (combatLog) {
+                combatLog.innerHTML = '';
+            }
+
+            const status = document.getElementById('gameStatus');
+            if (status) {
+                status.style.display = 'none';
+                status.textContent = '';
+            }
+
+            Object.assign(gameState.camera, {
+                pitch: initialCameraState.pitch,
+                yaw: initialCameraState.yaw,
+                distance: initialCameraState.distance,
+                targetDistance: initialCameraState.targetDistance,
+                minDistance: initialCameraState.minDistance,
+                maxDistance: initialCameraState.maxDistance,
+                zoomSpeed: initialCameraState.zoomSpeed,
+                height: initialCameraState.height,
+                targetHeight: initialCameraState.targetHeight,
+                heightRatio: initialCameraState.heightRatio,
+                defaultDistance: initialCameraState.defaultDistance
+            });
+
+            gameState.camera.targetHeight = gameState.camera.heightRatio * gameState.camera.targetDistance;
+
+            lastTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+            updateCamera(0.016);
+
+            addCombatMessage('Duel begins!', 'buff');
+            addCombatMessage('Click to capture mouse', 'ability-use');
+
+            updateUI();
+        }
+
         function updateUI() {
             // Player health
             const playerHealthBar = document.querySelector('#playerHealth .health-bar');
@@ -1651,9 +2107,10 @@
                     void comboContainer.offsetWidth;
                     comboContainer.classList.add('combo-change');
                     if (comboContainer._comboTimeout) {
-                        clearTimeout(comboContainer._comboTimeout);
+                        cancelTrackedTimeout(comboContainer._comboTimeout);
+                        comboContainer._comboTimeout = null;
                     }
-                    comboContainer._comboTimeout = setTimeout(() => {
+                    comboContainer._comboTimeout = scheduleTimeout(() => {
                         comboContainer.classList.remove('combo-change');
                         comboContainer._comboTimeout = null;
                     }, 250);
@@ -1731,49 +2188,80 @@
                 }
             });
             
-            // Check win/lose conditions
+            const status = document.getElementById('gameStatus');
+            if (status) {
+                status.style.display = 'none';
+                status.textContent = '';
+            }
+
             if (gameState.player.health <= 0 && !gameState.gameOver) {
                 gameState.gameOver = true;
+                gameState.outcome = 'defeat';
+                gameState.overlayMessage = {
+                    title: 'Defeat',
+                    subtitle: 'You were defeated. Click restart to try again.'
+                };
+                gameState.input.keys = {};
+                gameState.player.velocity.set(0, 0, 0);
+                gameState.enemies.forEach(enemyState => {
+                    if (enemyState.velocity) {
+                        enemyState.velocity.set(0, 0, 0);
+                    }
+                });
                 interruptEnemyCast('Combat Ended');
-                const status = document.getElementById('gameStatus');
-                status.textContent = 'DEFEAT\nPress F5 to restart';
-                status.style.display = 'block';
-                status.style.color = '#ff4444';
-            } else {
+                hideEnemyCastBar();
+            } else if (!gameState.gameOver) {
                 const allEnemiesDefeated = gameState.enemies.length > 0 &&
                     gameState.enemies.every(enemyState => enemyState.health <= 0);
 
-                if (allEnemiesDefeated && !gameState.gameOver) {
-                gameState.gameOver = true;
-                interruptEnemyCast('Combat Ended');
-                const status = document.getElementById('gameStatus');
-                status.textContent = 'VICTORY!\nPress F5 to restart';
-                status.style.display = 'block';
-                status.style.color = '#44ff44';
+                if (allEnemiesDefeated) {
+                    gameState.gameOver = true;
+                    gameState.outcome = 'victory';
+                    gameState.overlayMessage = {
+                        title: 'Victory!',
+                        subtitle: 'All enemies defeated. Click restart to duel again.'
+                    };
+                    gameState.input.keys = {};
+                    gameState.player.velocity.set(0, 0, 0);
+                    gameState.enemies.forEach(enemyState => {
+                        if (enemyState.velocity) {
+                            enemyState.velocity.set(0, 0, 0);
+                        }
+                    });
+                    interruptEnemyCast('Combat Ended');
+                    hideEnemyCastBar();
+                } else {
+                    gameState.overlayMessage = null;
+                    gameState.outcome = null;
                 }
             }
+
+            updateOverlay();
         }
 
         // Game loop
         let lastTime = 0;
         function animate(currentTime) {
             requestAnimationFrame(animate);
-            
+
             const deltaTime = (currentTime - lastTime) / 1000;
             lastTime = currentTime;
-            
-            if (!gameState.gameOver) {
-                updatePlayer(deltaTime);
-                updateEnemy(deltaTime);
-                updateEnemyAI(deltaTime);
+
+            if (!gameState.isPaused) {
+                if (!gameState.gameOver) {
+                    updatePlayer(deltaTime);
+                    updateEnemy(deltaTime);
+                    updateEnemyAI(deltaTime);
+                }
+
+                // Update particles
+                gameState.particles = gameState.particles.filter(particle => particle.update(deltaTime));
+
+                updateCamera(deltaTime);
             }
-            
-            // Update particles
-            gameState.particles = gameState.particles.filter(particle => particle.update(deltaTime));
-            
-            updateCamera(deltaTime);
+
             updateUI();
-            
+
             renderer.render(scene, camera);
         }
 
