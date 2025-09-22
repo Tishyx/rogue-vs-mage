@@ -149,6 +149,11 @@
             margin-bottom: 2px;
         }
 
+        .ability-name {
+            font-size: 10px;
+            text-align: center;
+        }
+
         .ability-key {
             font-size: 10px;
             color: #aaa;
@@ -243,6 +248,41 @@
             border-radius: 5px;
             border: 2px solid #ff6b6b;
         }
+
+        .ability-tooltip {
+            position: absolute;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 10, 10, 0.92);
+            border: 1px solid #666;
+            border-radius: 6px;
+            padding: 8px;
+            color: #fff;
+            font-size: 11px;
+            width: 180px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+            display: none;
+            text-align: left;
+            z-index: 10;
+        }
+
+        .ability-tooltip-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .ability-tooltip-cooldown {
+            color: #64b5f6;
+            margin-top: 6px;
+        }
+
+        .ability-tooltip-remaining {
+            margin-top: 4px;
+            color: #ffeb3b;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -271,38 +311,7 @@
         
         <div id="targetIndicator">Target: Frost Mage</div>
         
-        <div id="abilities">
-            <div class="ability" data-ability="0">
-                <span class="ability-key">1</span>
-                <span class="ability-icon">⚔️</span>
-                <span style="font-size: 10px;">Sinister</span>
-            </div>
-            <div class="ability" data-ability="1">
-                <span class="ability-key">2</span>
-                <span class="ability-icon">🗡️</span>
-                <span style="font-size: 10px;">Backstab</span>
-            </div>
-            <div class="ability" data-ability="2">
-                <span class="ability-key">3</span>
-                <span class="ability-icon">👤</span>
-                <span style="font-size: 10px;">Stealth</span>
-            </div>
-            <div class="ability" data-ability="3">
-                <span class="ability-key">4</span>
-                <span class="ability-icon">💨</span>
-                <span style="font-size: 10px;">Sprint</span>
-            </div>
-            <div class="ability" data-ability="4">
-                <span class="ability-key">5</span>
-                <span class="ability-icon">🌀</span>
-                <span style="font-size: 10px;">Evasion</span>
-            </div>
-            <div class="ability" data-ability="5">
-                <span class="ability-key">6</span>
-                <span class="ability-icon">☠️</span>
-                <span style="font-size: 10px;">Ambush</span>
-            </div>
-        </div>
+        <div id="abilities"></div>
         
         <div id="combatLog"></div>
         
@@ -335,12 +344,81 @@
                 buffs: {},
                 inCombat: false,
                 abilities: [
-                    { name: 'Sinister Strike', cost: 40, damage: 25, cooldown: 0, maxCooldown: 0 },
-                    { name: 'Backstab', cost: 60, damage: 50, cooldown: 0, maxCooldown: 4, requiresStealth: false, requiresBehind: true },
-                    { name: 'Stealth', cost: 0, cooldown: 0, maxCooldown: 10, duration: 10 },
-                    { name: 'Sprint', cost: 0, cooldown: 0, maxCooldown: 60, duration: 8 },
-                    { name: 'Evasion', cost: 0, cooldown: 0, maxCooldown: 180, duration: 5 },
-                    { name: 'Ambush', cost: 60, damage: 70, cooldown: 0, maxCooldown: 0, requiresStealth: true }
+                    {
+                        name: 'Sinister Strike',
+                        label: 'Sinister',
+                        key: '1',
+                        icon: '⚔️',
+                        description: 'A vicious melee attack dealing moderate damage to the target.',
+                        cost: 40,
+                        damage: 25,
+                        cooldown: 0,
+                        maxCooldown: 0,
+                        cooldownText: 'No cooldown'
+                    },
+                    {
+                        name: 'Backstab',
+                        label: 'Backstab',
+                        key: '2',
+                        icon: '🗡️',
+                        description: 'Strike from the shadows for massive damage when positioned behind the enemy.',
+                        cost: 60,
+                        damage: 50,
+                        cooldown: 0,
+                        maxCooldown: 4,
+                        requiresStealth: false,
+                        requiresBehind: true,
+                        cooldownText: 'Cooldown: 4s'
+                    },
+                    {
+                        name: 'Stealth',
+                        label: 'Stealth',
+                        key: '3',
+                        icon: '👤',
+                        description: 'Slip into the shadows for 10 seconds, allowing you to open with powerful attacks.',
+                        cost: 0,
+                        cooldown: 0,
+                        maxCooldown: 10,
+                        duration: 10,
+                        cooldownText: 'Cooldown: 10s'
+                    },
+                    {
+                        name: 'Sprint',
+                        label: 'Sprint',
+                        key: '4',
+                        icon: '💨',
+                        description: 'Boost your movement speed dramatically for a short duration.',
+                        cost: 0,
+                        cooldown: 0,
+                        maxCooldown: 60,
+                        duration: 8,
+                        cooldownText: 'Cooldown: 60s'
+                    },
+                    {
+                        name: 'Evasion',
+                        label: 'Evasion',
+                        key: '5',
+                        icon: '🌀',
+                        description: 'Dodge incoming attacks, greatly increasing your chance to avoid damage.',
+                        cost: 0,
+                        cooldown: 0,
+                        maxCooldown: 180,
+                        duration: 5,
+                        cooldownText: 'Cooldown: 180s'
+                    },
+                    {
+                        name: 'Ambush',
+                        label: 'Ambush',
+                        key: '6',
+                        icon: '☠️',
+                        description: 'Open from stealth with a brutal strike that deals heavy damage.',
+                        cost: 60,
+                        damage: 70,
+                        cooldown: 0,
+                        maxCooldown: 0,
+                        requiresStealth: true,
+                        cooldownText: 'No cooldown'
+                    }
                 ]
             },
             enemy: {
@@ -381,6 +459,47 @@
             gameOver: false,
             particles: []
         };
+
+        function renderAbilities() {
+            const abilitiesContainer = document.getElementById('abilities');
+            const abilityHtml = gameState.player.abilities.map((ability, index) => `
+                <div class="ability" data-ability="${index}">
+                    <span class="ability-key">${ability.key || index + 1}</span>
+                    <span class="ability-icon">${ability.icon}</span>
+                    <span class="ability-name">${ability.label || ability.name}</span>
+                    <div class="ability-tooltip">
+                        <div class="ability-tooltip-title">${ability.name}</div>
+                        <div>${ability.description}</div>
+                        <div class="ability-tooltip-cooldown">${ability.cooldownText}</div>
+                        <div class="ability-tooltip-remaining">Ready</div>
+                    </div>
+                </div>
+            `).join('');
+            abilitiesContainer.innerHTML = abilityHtml;
+        }
+
+        function initializeAbilityUI() {
+            renderAbilities();
+
+            const abilityElements = document.querySelectorAll('#abilities .ability');
+            abilityElements.forEach(element => {
+                element.addEventListener('mouseenter', () => {
+                    const tooltip = element.querySelector('.ability-tooltip');
+                    if (tooltip) {
+                        tooltip.style.display = 'block';
+                    }
+                });
+
+                element.addEventListener('mouseleave', () => {
+                    const tooltip = element.querySelector('.ability-tooltip');
+                    if (tooltip) {
+                        tooltip.style.display = 'none';
+                    }
+                });
+            });
+
+            bindAbilityClickHandlers();
+        }
 
         // Initialize Three.js
         const scene = new THREE.Scene();
@@ -508,12 +627,27 @@
         // Input handling
         document.addEventListener('keydown', (e) => {
             gameState.input.keys[e.key.toLowerCase()] = true;
-            
+
             // Ability usage
             if (e.key >= '1' && e.key <= '6') {
                 usePlayerAbility(parseInt(e.key) - 1);
             }
         });
+
+        function bindAbilityClickHandlers() {
+            const abilityElements = document.querySelectorAll('#abilities .ability');
+            abilityElements.forEach(element => {
+                element.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const abilityIndex = parseInt(element.dataset.ability, 10);
+                    if (!Number.isNaN(abilityIndex)) {
+                        usePlayerAbility(abilityIndex);
+                    }
+                });
+            });
+        }
 
         document.addEventListener('keyup', (e) => {
             gameState.input.keys[e.key.toLowerCase()] = false;
@@ -527,7 +661,11 @@
             }
         });
 
-        document.addEventListener('click', () => {
+        document.addEventListener('click', (event) => {
+            if (event.target.closest('.ability')) {
+                return;
+            }
+
             if (document.pointerLockElement !== document.body) {
                 document.body.requestPointerLock();
             }
@@ -931,11 +1069,21 @@
             abilityElements.forEach((element, index) => {
                 const ability = gameState.player.abilities[index];
                 if (!ability) return;
-                
+
+                const tooltip = element.querySelector('.ability-tooltip');
+                if (tooltip) {
+                    const remaining = tooltip.querySelector('.ability-tooltip-remaining');
+                    if (remaining) {
+                        remaining.textContent = ability.cooldown > 0
+                            ? `Remaining cooldown: ${ability.cooldown.toFixed(1)}s`
+                            : 'Ready';
+                    }
+                }
+
                 // Remove old cooldown overlay
                 const oldOverlay = element.querySelector('.cooldown-overlay');
                 if (oldOverlay) oldOverlay.remove();
-                
+
                 if (ability.cooldown > 0) {
                     element.classList.add('on-cooldown');
                     const overlay = document.createElement('div');
@@ -992,6 +1140,9 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        // UI initialization
+        initializeAbilityUI();
 
         // Start messages
         addCombatMessage('Duel begins!', 'buff');
