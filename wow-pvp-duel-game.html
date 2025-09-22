@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D PvP Duel: Rogue vs Frost Mage</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: #000;
+            cursor: crosshair;
+        }
+
+        #gameCanvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .health-bar-container {
+            position: absolute;
+            width: 300px;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #333;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #playerHealth {
+            top: 20px;
+            left: 20px;
+        }
+
+        #enemyHealth {
+            top: 20px;
+            right: 20px;
+        }
+
+        .health-bar {
+            height: 100%;
+            background: linear-gradient(to bottom, #4caf50, #2e7d32);
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .mana-bar {
+            height: 100%;
+            background: linear-gradient(to bottom, #2196f3, #1565c0);
+            transition: width 0.3s ease;
+        }
+
+        .resource-bar-container {
+            position: absolute;
+            width: 300px;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #333;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #playerEnergy {
+            top: 55px;
+            left: 20px;
+        }
+
+        #enemyMana {
+            top: 55px;
+            right: 20px;
+        }
+
+        .energy-bar {
+            height: 100%;
+            background: linear-gradient(to bottom, #ffeb3b, #f57c00);
+            transition: width 0.3s ease;
+        }
+
+        .bar-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 12px;
+            line-height: 30px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            z-index: 1;
+        }
+
+        .resource-text {
+            line-height: 20px;
+            font-size: 11px;
+        }
+
+        #abilities {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+
+        .ability {
+            width: 60px;
+            height: 60px;
+            background: rgba(30, 30, 30, 0.9);
+            border: 3px solid #444;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .ability:hover {
+            border-color: #888;
+            transform: scale(1.05);
+        }
+
+        .ability.on-cooldown {
+            filter: brightness(0.3);
+            cursor: not-allowed;
+        }
+
+        .ability-icon {
+            font-size: 24px;
+            margin-bottom: 2px;
+        }
+
+        .ability-key {
+            font-size: 10px;
+            color: #aaa;
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-weight: bold;
+        }
+
+        .cooldown-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: yellow;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 5px;
+        }
+
+        #combatLog {
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            width: 300px;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 12px;
+            color: #ccc;
+        }
+
+        .combat-message {
+            margin: 2px 0;
+            animation: fadeIn 0.3s;
+        }
+
+        .damage { color: #ff6b6b; }
+        .heal { color: #4caf50; }
+        .ability-use { color: #64b5f6; }
+        .buff { color: #ffeb3b; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        #gameStatus {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: white;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+            display: none;
+            text-align: center;
+        }
+
+        #controls {
+            position: absolute;
+            top: 100px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            color: white;
+            font-size: 12px;
+        }
+
+        .control-item {
+            margin: 5px 0;
+        }
+
+        #targetIndicator {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff6b6b;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 15px;
+            border-radius: 5px;
+            border: 2px solid #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui">
+        <div id="playerHealth" class="health-bar-container">
+            <div class="bar-text">Rogue: <span id="playerHpText">100/100</span></div>
+            <div class="health-bar" style="width: 100%"></div>
+        </div>
+        
+        <div id="playerEnergy" class="resource-bar-container">
+            <div class="bar-text resource-text">Energy: <span id="playerEnergyText">100/100</span></div>
+            <div class="energy-bar" style="width: 100%"></div>
+        </div>
+        
+        <div id="enemyHealth" class="health-bar-container">
+            <div class="bar-text">Frost Mage: <span id="enemyHpText">100/100</span></div>
+            <div class="health-bar" style="width: 100%"></div>
+        </div>
+        
+        <div id="enemyMana" class="resource-bar-container">
+            <div class="bar-text resource-text">Mana: <span id="enemyManaText">100/100</span></div>
+            <div class="mana-bar" style="width: 100%"></div>
+        </div>
+        
+        <div id="targetIndicator">Target: Frost Mage</div>
+        
+        <div id="abilities">
+            <div class="ability" data-ability="0">
+                <span class="ability-key">1</span>
+                <span class="ability-icon">⚔️</span>
+                <span style="font-size: 10px;">Sinister</span>
+            </div>
+            <div class="ability" data-ability="1">
+                <span class="ability-key">2</span>
+                <span class="ability-icon">🗡️</span>
+                <span style="font-size: 10px;">Backstab</span>
+            </div>
+            <div class="ability" data-ability="2">
+                <span class="ability-key">3</span>
+                <span class="ability-icon">👤</span>
+                <span style="font-size: 10px;">Stealth</span>
+            </div>
+            <div class="ability" data-ability="3">
+                <span class="ability-key">4</span>
+                <span class="ability-icon">💨</span>
+                <span style="font-size: 10px;">Sprint</span>
+            </div>
+            <div class="ability" data-ability="4">
+                <span class="ability-key">5</span>
+                <span class="ability-icon">🌀</span>
+                <span style="font-size: 10px;">Evasion</span>
+            </div>
+            <div class="ability" data-ability="5">
+                <span class="ability-key">6</span>
+                <span class="ability-icon">☠️</span>
+                <span style="font-size: 10px;">Ambush</span>
+            </div>
+        </div>
+        
+        <div id="combatLog"></div>
+        
+        <div id="controls">
+            <div class="control-item"><strong>Movement:</strong> WASD</div>
+            <div class="control-item"><strong>Camera:</strong> Mouse</div>
+            <div class="control-item"><strong>Jump:</strong> Space</div>
+            <div class="control-item"><strong>Abilities:</strong> 1-6</div>
+            <div class="control-item"><strong>Target:</strong> Tab</div>
+        </div>
+        
+        <div id="gameStatus"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Game state
+        const gameState = {
+            player: {
+                position: new THREE.Vector3(0, 1, 10),
+                rotation: 0,
+                velocity: new THREE.Vector3(0, 0, 0),
+                health: 100,
+                maxHealth: 100,
+                energy: 100,
+                maxEnergy: 100,
+                isStealthed: false,
+                buffs: {},
+                inCombat: false,
+                abilities: [
+                    { name: 'Sinister Strike', cost: 40, damage: 25, cooldown: 0, maxCooldown: 0 },
+                    { name: 'Backstab', cost: 60, damage: 50, cooldown: 0, maxCooldown: 4, requiresStealth: false, requiresBehind: true },
+                    { name: 'Stealth', cost: 0, cooldown: 0, maxCooldown: 10, duration: 10 },
+                    { name: 'Sprint', cost: 0, cooldown: 0, maxCooldown: 60, duration: 8 },
+                    { name: 'Evasion', cost: 0, cooldown: 0, maxCooldown: 180, duration: 5 },
+                    { name: 'Ambush', cost: 60, damage: 70, cooldown: 0, maxCooldown: 0, requiresStealth: true }
+                ]
+            },
+            enemy: {
+                position: new THREE.Vector3(0, 1, -10),
+                rotation: 0,
+                velocity: new THREE.Vector3(0, 0, 0),
+                health: 100,
+                maxHealth: 100,
+                mana: 100,
+                maxMana: 100,
+                isCasting: false,
+                castTime: 0,
+                currentCast: null,
+                isRooted: false,
+                rootDuration: 0,
+                abilities: [
+                    { name: 'Frostbolt', cost: 30, damage: 35, castTime: 2.5, cooldown: 0 },
+                    { name: 'Frost Nova', cost: 40, damage: 15, cooldown: 0, maxCooldown: 20, isInstant: true },
+                    { name: 'Blink', cost: 20, cooldown: 0, maxCooldown: 15, isInstant: true },
+                    { name: 'Ice Barrier', cost: 50, cooldown: 0, maxCooldown: 30, shield: 40, isInstant: true },
+                    { name: 'Cone of Cold', cost: 35, damage: 25, cooldown: 0, maxCooldown: 8, isInstant: true }
+                ],
+                shield: 0,
+                aiState: 'aggressive',
+                lastAbilityTime: 0
+            },
+            camera: {
+                pitch: 0,
+                yaw: 0,
+                distance: 15,
+                height: 5
+            },
+            input: {
+                keys: {},
+                mouseX: 0,
+                mouseY: 0
+            },
+            gameOver: false,
+            particles: []
+        };
+
+        // Initialize Three.js
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x000033, 10, 100);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(10, 20, 5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
+        scene.add(directionalLight);
+
+        // Arena floor
+        const floorGeometry = new THREE.CircleGeometry(30, 32);
+        const floorMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x2a2a3a,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Arena walls (pillars)
+        const pillarGeometry = new THREE.CylinderGeometry(1, 1, 10, 8);
+        const pillarMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a6a });
+        
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            pillar.position.set(Math.cos(angle) * 25, 5, Math.sin(angle) * 25);
+            pillar.castShadow = true;
+            scene.add(pillar);
+        }
+
+        // Create player (Rogue)
+        const playerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+        const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+        const playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
+        playerMesh.castShadow = true;
+        scene.add(playerMesh);
+
+        // Create enemy (Frost Mage)
+        const enemyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+        const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0x4169e1 });
+        const enemyMesh = new THREE.Mesh(enemyGeometry, enemyMaterial);
+        enemyMesh.castShadow = true;
+        scene.add(enemyMesh);
+
+        // Particle system for effects
+        class Particle {
+            constructor(position, velocity, color, lifetime) {
+                this.position = position.clone();
+                this.velocity = velocity;
+                this.color = color;
+                this.lifetime = lifetime;
+                this.maxLifetime = lifetime;
+                
+                const geometry = new THREE.SphereGeometry(0.1, 4, 4);
+                const material = new THREE.MeshBasicMaterial({ color: color });
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.copy(this.position);
+                scene.add(this.mesh);
+            }
+
+            update(deltaTime) {
+                this.lifetime -= deltaTime;
+                if (this.lifetime <= 0) {
+                    scene.remove(this.mesh);
+                    return false;
+                }
+                
+                this.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+                this.mesh.position.copy(this.position);
+                this.mesh.material.opacity = this.lifetime / this.maxLifetime;
+                this.mesh.material.transparent = true;
+                
+                return true;
+            }
+        }
+
+        function createParticleEffect(position, type) {
+            const particleCount = type === 'frost' ? 20 : 15;
+            for (let i = 0; i < particleCount; i++) {
+                const velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 5,
+                    Math.random() * 5,
+                    (Math.random() - 0.5) * 5
+                );
+                const color = type === 'frost' ? 0x00bfff : 
+                              type === 'damage' ? 0xff0000 : 
+                              type === 'heal' ? 0x00ff00 : 0xffff00;
+                gameState.particles.push(new Particle(position, velocity, color, 1));
+            }
+        }
+
+        // Combat log
+        function addCombatMessage(message, type) {
+            const log = document.getElementById('combatLog');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `combat-message ${type}`;
+            messageDiv.textContent = message;
+            log.appendChild(messageDiv);
+            log.scrollTop = log.scrollHeight;
+            
+            // Remove old messages
+            while (log.children.length > 10) {
+                log.removeChild(log.firstChild);
+            }
+        }
+
+        // Input handling
+        document.addEventListener('keydown', (e) => {
+            gameState.input.keys[e.key.toLowerCase()] = true;
+            
+            // Ability usage
+            if (e.key >= '1' && e.key <= '6') {
+                usePlayerAbility(parseInt(e.key) - 1);
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            gameState.input.keys[e.key.toLowerCase()] = false;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                gameState.camera.yaw -= e.movementX * 0.002;
+                gameState.camera.pitch -= e.movementY * 0.002;
+                gameState.camera.pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, gameState.camera.pitch));
+            }
+        });
+
+        document.addEventListener('click', () => {
+            if (document.pointerLockElement !== document.body) {
+                document.body.requestPointerLock();
+            }
+        });
+
+        // Ability system
+        function usePlayerAbility(index) {
+            if (gameState.gameOver) return;
+            
+            const ability = gameState.player.abilities[index];
+            if (!ability) return;
+            
+            // Check cooldown
+            if (ability.cooldown > 0) {
+                addCombatMessage(`${ability.name} is on cooldown!`, 'ability-use');
+                return;
+            }
+            
+            // Check energy cost
+            if (ability.cost > gameState.player.energy) {
+                addCombatMessage('Not enough energy!', 'ability-use');
+                return;
+            }
+            
+            // Check special requirements
+            if (ability.requiresStealth && !gameState.player.isStealthed) {
+                addCombatMessage(`${ability.name} requires stealth!`, 'ability-use');
+                return;
+            }
+            
+            if (ability.requiresBehind) {
+                const toEnemy = gameState.enemy.position.clone().sub(gameState.player.position).normalize();
+                const enemyFacing = new THREE.Vector3(Math.sin(gameState.enemy.rotation), 0, Math.cos(gameState.enemy.rotation));
+                const dotProduct = toEnemy.dot(enemyFacing);
+                if (dotProduct < 0.5) {
+                    addCombatMessage('Must be behind target!', 'ability-use');
+                    return;
+                }
+            }
+            
+            const distance = gameState.player.position.distanceTo(gameState.enemy.position);
+            
+            // Execute ability
+            switch (ability.name) {
+                case 'Stealth':
+                    if (distance < 10) {
+                        addCombatMessage('Too close to enemy!', 'ability-use');
+                        return;
+                    }
+                    gameState.player.isStealthed = true;
+                    gameState.player.buffs.stealth = ability.duration;
+                    playerMaterial.opacity = 0.3;
+                    playerMaterial.transparent = true;
+                    addCombatMessage('You vanish into the shadows!', 'buff');
+                    break;
+                    
+                case 'Sprint':
+                    gameState.player.buffs.sprint = ability.duration;
+                    addCombatMessage('Sprint activated!', 'buff');
+                    break;
+                    
+                case 'Evasion':
+                    gameState.player.buffs.evasion = ability.duration;
+                    addCombatMessage('Evasion activated!', 'buff');
+                    break;
+                    
+                default:
+                    // Damage abilities
+                    if (distance > 5) {
+                        addCombatMessage('Too far from target!', 'ability-use');
+                        return;
+                    }
+                    
+                    let damage = ability.damage || 0;
+                    
+                    // Ambush and Backstab get bonus from stealth
+                    if ((ability.name === 'Ambush' || ability.name === 'Backstab') && gameState.player.isStealthed) {
+                        damage *= 1.5;
+                    }
+                    
+                    if (gameState.enemy.shield > 0) {
+                        const shieldDamage = Math.min(damage, gameState.enemy.shield);
+                        gameState.enemy.shield -= shieldDamage;
+                        damage -= shieldDamage;
+                        if (gameState.enemy.shield <= 0) {
+                            addCombatMessage('Ice Barrier broken!', 'damage');
+                        }
+                    }
+                    
+                    gameState.enemy.health -= damage;
+                    createParticleEffect(gameState.enemy.position, 'damage');
+                    addCombatMessage(`${ability.name} hits for ${Math.round(damage)} damage!`, 'damage');
+                    
+                    // Break stealth on damage
+                    if (gameState.player.isStealthed) {
+                        gameState.player.isStealthed = false;
+                        playerMaterial.opacity = 1;
+                        playerMaterial.transparent = false;
+                        delete gameState.player.buffs.stealth;
+                    }
+                    break;
+            }
+            
+            // Consume energy and set cooldown
+            gameState.player.energy -= ability.cost;
+            if (ability.maxCooldown) {
+                ability.cooldown = ability.maxCooldown;
+            }
+            
+            updateUI();
+        }
+
+        // Enemy AI
+        function updateEnemyAI(deltaTime) {
+            if (gameState.gameOver || gameState.enemy.health <= 0) return;
+            
+            const distance = gameState.enemy.position.distanceTo(gameState.player.position);
+            const toPlayer = gameState.player.position.clone().sub(gameState.enemy.position).normalize();
+            
+            // Face the player
+            gameState.enemy.rotation = Math.atan2(toPlayer.x, toPlayer.z);
+            
+            // Root duration
+            if (gameState.enemy.isRooted) {
+                gameState.enemy.rootDuration -= deltaTime;
+                if (gameState.enemy.rootDuration <= 0) {
+                    gameState.enemy.isRooted = false;
+                }
+            }
+            
+            // Handle casting
+            if (gameState.enemy.isCasting) {
+                gameState.enemy.castTime -= deltaTime;
+                if (gameState.enemy.castTime <= 0) {
+                    completeCast();
+                }
+                return;
+            }
+            
+            // Ability usage logic
+            const now = Date.now() / 1000;
+            if (now - gameState.enemy.lastAbilityTime > 1) { // AI thinks every second
+                
+                // Ice Barrier when low health
+                if (gameState.enemy.health < 40 && gameState.enemy.abilities[3].cooldown <= 0 && gameState.enemy.mana >= 50) {
+                    gameState.enemy.shield = 40;
+                    gameState.enemy.mana -= 50;
+                    gameState.enemy.abilities[3].cooldown = gameState.enemy.abilities[3].maxCooldown;
+                    addCombatMessage('Frost Mage casts Ice Barrier!', 'buff');
+                    createParticleEffect(gameState.enemy.position, 'frost');
+                }
+                // Frost Nova when player is close
+                else if (distance < 5 && gameState.enemy.abilities[1].cooldown <= 0 && gameState.enemy.mana >= 40) {
+                    // Frost Nova
+                    gameState.player.velocity.set(0, 0, 0);
+                    gameState.enemy.isRooted = true;
+                    gameState.enemy.rootDuration = 3;
+                    gameState.player.health -= 15;
+                    gameState.enemy.mana -= 40;
+                    gameState.enemy.abilities[1].cooldown = gameState.enemy.abilities[1].maxCooldown;
+                    createParticleEffect(gameState.player.position, 'frost');
+                    addCombatMessage('Frost Mage casts Frost Nova! You are frozen!', 'damage');
+                    
+                    // Blink away after nova
+                    setTimeout(() => {
+                        if (gameState.enemy.abilities[2].cooldown <= 0 && gameState.enemy.mana >= 20) {
+                            const blinkDirection = toPlayer.clone().multiplyScalar(-15);
+                            gameState.enemy.position.add(blinkDirection);
+                            gameState.enemy.mana -= 20;
+                            gameState.enemy.abilities[2].cooldown = gameState.enemy.abilities[2].maxCooldown;
+                            addCombatMessage('Frost Mage blinks away!', 'ability-use');
+                            createParticleEffect(gameState.enemy.position, 'frost');
+                        }
+                    }, 100);
+                }
+                // Cone of Cold at mid range
+                else if (distance < 8 && distance > 3 && gameState.enemy.abilities[4].cooldown <= 0 && gameState.enemy.mana >= 35) {
+                    gameState.player.health -= 25;
+                    gameState.enemy.mana -= 35;
+                    gameState.enemy.abilities[4].cooldown = gameState.enemy.abilities[4].maxCooldown;
+                    createParticleEffect(gameState.player.position, 'frost');
+                    addCombatMessage('Frost Mage casts Cone of Cold for 25 damage!', 'damage');
+                }
+                // Frostbolt as default
+                else if (gameState.enemy.mana >= 30 && !gameState.player.isStealthed) {
+                    gameState.enemy.isCasting = true;
+                    gameState.enemy.castTime = 2.5;
+                    gameState.enemy.currentCast = 'Frostbolt';
+                    addCombatMessage('Frost Mage begins casting Frostbolt...', 'ability-use');
+                }
+                
+                gameState.enemy.lastAbilityTime = now;
+            }
+            
+            // Movement
+            if (!gameState.enemy.isRooted && !gameState.enemy.isCasting) {
+                if (distance > 20) {
+                    // Move closer
+                    gameState.enemy.velocity = toPlayer.clone().multiplyScalar(3);
+                } else if (distance < 8) {
+                    // Kite away
+                    gameState.enemy.velocity = toPlayer.clone().multiplyScalar(-2);
+                } else {
+                    // Strafe
+                    const strafe = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
+                    gameState.enemy.velocity = strafe.multiplyScalar(Math.sin(now * 2) * 2);
+                }
+            } else {
+                gameState.enemy.velocity.set(0, 0, 0);
+            }
+        }
+
+        function completeCast() {
+            gameState.enemy.isCasting = false;
+            
+            if (gameState.enemy.currentCast === 'Frostbolt') {
+                // Check if player evaded
+                if (gameState.player.buffs.evasion) {
+                    addCombatMessage('Frostbolt missed! (Evasion)', 'buff');
+                } else {
+                    const damage = 35;
+                    gameState.player.health -= damage;
+                    gameState.enemy.mana -= 30;
+                    createParticleEffect(gameState.player.position, 'frost');
+                    addCombatMessage(`Frostbolt hits for ${damage} damage!`, 'damage');
+                    
+                    // Slow effect
+                    gameState.player.buffs.slow = 3;
+                }
+            }
+            
+            gameState.enemy.currentCast = null;
+        }
+
+        // Update functions
+        function updatePlayer(deltaTime) {
+            const keys = gameState.input.keys;
+            const moveSpeed = gameState.player.buffs.sprint ? 15 : (gameState.player.buffs.slow ? 5 : 8);
+            
+            // Movement
+            let moveX = 0, moveZ = 0;
+            if (keys['w']) moveZ = -1;
+            if (keys['s']) moveZ = 1;
+            if (keys['a']) moveX = -1;
+            if (keys['d']) moveX = 1;
+            
+            if (moveX !== 0 || moveZ !== 0) {
+                const moveDir = new THREE.Vector3(moveX, 0, moveZ).normalize();
+                
+                // Rotate movement based on camera yaw
+                const rotatedX = moveDir.x * Math.cos(gameState.camera.yaw) - moveDir.z * Math.sin(gameState.camera.yaw);
+                const rotatedZ = moveDir.x * Math.sin(gameState.camera.yaw) + moveDir.z * Math.cos(gameState.camera.yaw);
+                
+                gameState.player.velocity.x = rotatedX * moveSpeed;
+                gameState.player.velocity.z = rotatedZ * moveSpeed;
+                
+                // Break stealth on movement
+                if (gameState.player.isStealthed && (Math.abs(moveX) > 0 || Math.abs(moveZ) > 0)) {
+                    // Allow some movement in stealth but slower
+                    gameState.player.velocity.multiplyScalar(0.5);
+                }
+            } else {
+                gameState.player.velocity.x *= 0.8;
+                gameState.player.velocity.z *= 0.8;
+            }
+            
+            // Jump
+            if (keys[' '] && Math.abs(gameState.player.velocity.y) < 0.1) {
+                gameState.player.velocity.y = 8;
+            }
+            
+            // Apply gravity
+            gameState.player.velocity.y -= 20 * deltaTime;
+            
+            // Update position
+            gameState.player.position.add(gameState.player.velocity.clone().multiplyScalar(deltaTime));
+            
+            // Ground collision
+            if (gameState.player.position.y < 1) {
+                gameState.player.position.y = 1;
+                gameState.player.velocity.y = 0;
+            }
+            
+            // Arena bounds
+            const distFromCenter = Math.sqrt(gameState.player.position.x ** 2 + gameState.player.position.z ** 2);
+            if (distFromCenter > 28) {
+                const dir = new THREE.Vector3(gameState.player.position.x, 0, gameState.player.position.z).normalize();
+                gameState.player.position.x = dir.x * 28;
+                gameState.player.position.z = dir.z * 28;
+            }
+            
+            // Update mesh
+            playerMesh.position.copy(gameState.player.position);
+            
+            // Energy regeneration
+            gameState.player.energy = Math.min(gameState.player.maxEnergy, gameState.player.energy + 20 * deltaTime);
+            
+            // Update buffs
+            for (const buff in gameState.player.buffs) {
+                gameState.player.buffs[buff] -= deltaTime;
+                if (gameState.player.buffs[buff] <= 0) {
+                    delete gameState.player.buffs[buff];
+                    if (buff === 'stealth') {
+                        gameState.player.isStealthed = false;
+                        playerMaterial.opacity = 1;
+                        playerMaterial.transparent = false;
+                    }
+                }
+            }
+            
+            // Update ability cooldowns
+            gameState.player.abilities.forEach(ability => {
+                if (ability.cooldown > 0) {
+                    ability.cooldown -= deltaTime;
+                    if (ability.cooldown < 0) ability.cooldown = 0;
+                }
+            });
+        }
+
+        function updateEnemy(deltaTime) {
+            // Update position
+            gameState.enemy.position.add(gameState.enemy.velocity.clone().multiplyScalar(deltaTime));
+            
+            // Arena bounds
+            const distFromCenter = Math.sqrt(gameState.enemy.position.x ** 2 + gameState.enemy.position.z ** 2);
+            if (distFromCenter > 28) {
+                const dir = new THREE.Vector3(gameState.enemy.position.x, 0, gameState.enemy.position.z).normalize();
+                gameState.enemy.position.x = dir.x * 28;
+                gameState.enemy.position.z = dir.z * 28;
+            }
+            
+            // Update mesh
+            enemyMesh.position.copy(gameState.enemy.position);
+            enemyMesh.rotation.y = gameState.enemy.rotation;
+            
+            // Mana regeneration
+            gameState.enemy.mana = Math.min(gameState.enemy.maxMana, gameState.enemy.mana + 10 * deltaTime);
+            
+            // Update ability cooldowns
+            gameState.enemy.abilities.forEach(ability => {
+                if (ability.cooldown > 0) {
+                    ability.cooldown -= deltaTime;
+                    if (ability.cooldown < 0) ability.cooldown = 0;
+                }
+            });
+        }
+
+        function updateCamera() {
+            // Third-person camera
+            const cameraOffset = new THREE.Vector3(
+                Math.sin(gameState.camera.yaw) * gameState.camera.distance,
+                gameState.camera.height + Math.sin(gameState.camera.pitch) * 10,
+                Math.cos(gameState.camera.yaw) * gameState.camera.distance
+            );
+            
+            camera.position.copy(gameState.player.position).add(cameraOffset);
+            camera.lookAt(gameState.player.position.clone().add(new THREE.Vector3(0, 2, 0)));
+        }
+
+        function updateUI() {
+            // Player health
+            const playerHealthBar = document.querySelector('#playerHealth .health-bar');
+            const playerHealthPercent = Math.max(0, gameState.player.health / gameState.player.maxHealth * 100);
+            playerHealthBar.style.width = playerHealthPercent + '%';
+            document.getElementById('playerHpText').textContent = 
+                `${Math.max(0, Math.round(gameState.player.health))}/${gameState.player.maxHealth}`;
+            
+            // Player energy
+            const playerEnergyBar = document.querySelector('#playerEnergy .energy-bar');
+            const playerEnergyPercent = gameState.player.energy / gameState.player.maxEnergy * 100;
+            playerEnergyBar.style.width = playerEnergyPercent + '%';
+            document.getElementById('playerEnergyText').textContent = 
+                `${Math.round(gameState.player.energy)}/${gameState.player.maxEnergy}`;
+            
+            // Enemy health
+            const enemyHealthBar = document.querySelector('#enemyHealth .health-bar');
+            const enemyHealthPercent = Math.max(0, gameState.enemy.health / gameState.enemy.maxHealth * 100);
+            enemyHealthBar.style.width = enemyHealthPercent + '%';
+            document.getElementById('enemyHpText').textContent = 
+                `${Math.max(0, Math.round(gameState.enemy.health))}/${gameState.enemy.maxHealth}`;
+            
+            // Enemy mana
+            const enemyManaBar = document.querySelector('#enemyMana .mana-bar');
+            const enemyManaPercent = gameState.enemy.mana / gameState.enemy.maxMana * 100;
+            enemyManaBar.style.width = enemyManaPercent + '%';
+            document.getElementById('enemyManaText').textContent = 
+                `${Math.round(gameState.enemy.mana)}/${gameState.enemy.maxMana}`;
+            
+            // Update ability cooldowns
+            const abilityElements = document.querySelectorAll('.ability');
+            abilityElements.forEach((element, index) => {
+                const ability = gameState.player.abilities[index];
+                if (!ability) return;
+                
+                // Remove old cooldown overlay
+                const oldOverlay = element.querySelector('.cooldown-overlay');
+                if (oldOverlay) oldOverlay.remove();
+                
+                if (ability.cooldown > 0) {
+                    element.classList.add('on-cooldown');
+                    const overlay = document.createElement('div');
+                    overlay.className = 'cooldown-overlay';
+                    overlay.textContent = Math.ceil(ability.cooldown);
+                    element.appendChild(overlay);
+                } else {
+                    element.classList.remove('on-cooldown');
+                }
+            });
+            
+            // Check win/lose conditions
+            if (gameState.player.health <= 0 && !gameState.gameOver) {
+                gameState.gameOver = true;
+                const status = document.getElementById('gameStatus');
+                status.textContent = 'DEFEAT\nPress F5 to restart';
+                status.style.display = 'block';
+                status.style.color = '#ff4444';
+            } else if (gameState.enemy.health <= 0 && !gameState.gameOver) {
+                gameState.gameOver = true;
+                const status = document.getElementById('gameStatus');
+                status.textContent = 'VICTORY!\nPress F5 to restart';
+                status.style.display = 'block';
+                status.style.color = '#44ff44';
+            }
+        }
+
+        // Game loop
+        let lastTime = 0;
+        function animate(currentTime) {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+            
+            if (!gameState.gameOver) {
+                updatePlayer(deltaTime);
+                updateEnemy(deltaTime);
+                updateEnemyAI(deltaTime);
+            }
+            
+            // Update particles
+            gameState.particles = gameState.particles.filter(particle => particle.update(deltaTime));
+            
+            updateCamera();
+            updateUI();
+            
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start messages
+        addCombatMessage('Duel begins!', 'buff');
+        addCombatMessage('Click to capture mouse', 'ability-use');
+
+        // Start game
+        animate(0);
+    </script>
+</body>
+</html>
