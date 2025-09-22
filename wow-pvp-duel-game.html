@@ -162,6 +162,47 @@
             font-size: 11px;
         }
 
+        #playerBuffs {
+            position: absolute;
+            top: 90px;
+            left: 20px;
+            display: flex;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .buff-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.65);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #fff;
+            position: relative;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+        }
+
+        .buff-icon.buff {
+            border-color: rgba(76, 175, 80, 0.8);
+        }
+
+        .buff-icon.debuff {
+            border-color: rgba(244, 67, 54, 0.8);
+        }
+
+        .buff-timer {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        }
+
         #abilities {
             position: absolute;
             bottom: 20px;
@@ -351,7 +392,9 @@
             <div class="bar-text resource-text">Energy: <span id="playerEnergyText">100/100</span></div>
             <div class="energy-bar" style="width: 100%"></div>
         </div>
-        
+
+        <div id="playerBuffs"></div>
+
         <div id="enemyHealth" class="health-bar-container">
             <div class="bar-text">Frost Mage: <span id="enemyHpText">100/100</span></div>
             <div class="health-bar" style="width: 100%"></div>
@@ -399,7 +442,7 @@
                 isStealthed: false,
                 isRooted: false,
                 rootDuration: 0,
-                buffs: {},
+                buffs: new Map(),
                 inCombat: false,
                 abilities: [
                     {
@@ -519,6 +562,27 @@
             gameOver: false,
             particles: []
         };
+
+        function setPlayerBuff(name, { duration = 0, icon = '', type = 'buff' } = {}) {
+            gameState.player.buffs.set(name, {
+                duration,
+                remaining: duration,
+                icon,
+                type
+            });
+        }
+
+        function removePlayerBuff(name) {
+            if (!gameState.player.buffs.has(name)) {
+                return;
+            }
+            gameState.player.buffs.delete(name);
+            if (name === 'stealth') {
+                gameState.player.isStealthed = false;
+                playerMaterial.opacity = 1;
+                playerMaterial.transparent = false;
+            }
+        }
 
         const enemyCastBarUI = {
             container: document.getElementById('enemyCastBar'),
@@ -856,19 +920,31 @@
                         return;
                     }
                     gameState.player.isStealthed = true;
-                    gameState.player.buffs.stealth = ability.duration;
+                    setPlayerBuff('stealth', {
+                        duration: ability.duration,
+                        icon: ability.icon,
+                        type: 'buff'
+                    });
                     playerMaterial.opacity = 0.3;
                     playerMaterial.transparent = true;
                     addCombatMessage('You vanish into the shadows!', 'buff');
                     break;
-                    
+
                 case 'Sprint':
-                    gameState.player.buffs.sprint = ability.duration;
+                    setPlayerBuff('sprint', {
+                        duration: ability.duration,
+                        icon: ability.icon,
+                        type: 'buff'
+                    });
                     addCombatMessage('Sprint activated!', 'buff');
                     break;
-                    
+
                 case 'Evasion':
-                    gameState.player.buffs.evasion = ability.duration;
+                    setPlayerBuff('evasion', {
+                        duration: ability.duration,
+                        icon: ability.icon,
+                        type: 'buff'
+                    });
                     addCombatMessage('Evasion activated!', 'buff');
                     break;
                     
@@ -901,10 +977,7 @@
                     
                     // Break stealth on damage
                     if (gameState.player.isStealthed) {
-                        gameState.player.isStealthed = false;
-                        playerMaterial.opacity = 1;
-                        playerMaterial.transparent = false;
-                        delete gameState.player.buffs.stealth;
+                        removePlayerBuff('stealth');
                     }
                     break;
             }
@@ -1052,7 +1125,7 @@
 
             if (finishedSpell === 'Frostbolt') {
                 // Check if player evaded
-                if (gameState.player.buffs.evasion) {
+                if (gameState.player.buffs.has('evasion')) {
                     addCombatMessage('Frostbolt missed! (Evasion)', 'buff');
                 } else {
                     const damage = 35;
@@ -1063,7 +1136,11 @@
                     addCombatMessage(`Frostbolt hits for ${damage} damage!`, 'damage');
 
                     // Slow effect
-                    gameState.player.buffs.slow = 3;
+                    setPlayerBuff('slow', {
+                        duration: 3,
+                        icon: '❄️',
+                        type: 'debuff'
+                    });
                 }
             }
 
@@ -1077,7 +1154,9 @@
         // Update functions
         function updatePlayer(deltaTime) {
             const keys = gameState.input.keys;
-            const moveSpeed = gameState.player.buffs.sprint ? 15 : (gameState.player.buffs.slow ? 5 : 8);
+            const hasSprint = gameState.player.buffs.has('sprint');
+            const hasSlow = gameState.player.buffs.has('slow');
+            const moveSpeed = hasSprint ? 15 : (hasSlow ? 5 : 8);
             
             // Movement
             if (gameState.player.isRooted) {
@@ -1148,15 +1227,10 @@
             gameState.player.energy = Math.min(gameState.player.maxEnergy, gameState.player.energy + 20 * deltaTime);
             
             // Update buffs
-            for (const buff in gameState.player.buffs) {
-                gameState.player.buffs[buff] -= deltaTime;
-                if (gameState.player.buffs[buff] <= 0) {
-                    delete gameState.player.buffs[buff];
-                    if (buff === 'stealth') {
-                        gameState.player.isStealthed = false;
-                        playerMaterial.opacity = 1;
-                        playerMaterial.transparent = false;
-                    }
+            for (const [buffName, buffData] of gameState.player.buffs.entries()) {
+                buffData.remaining -= deltaTime;
+                if (buffData.remaining <= 0) {
+                    removePlayerBuff(buffName);
                 }
             }
             
@@ -1235,9 +1309,30 @@
             const enemyManaBar = document.querySelector('#enemyMana .mana-bar');
             const enemyManaPercent = gameState.enemy.mana / gameState.enemy.maxMana * 100;
             enemyManaBar.style.width = enemyManaPercent + '%';
-            document.getElementById('enemyManaText').textContent = 
+            document.getElementById('enemyManaText').textContent =
                 `${Math.round(gameState.enemy.mana)}/${gameState.enemy.maxMana}`;
-            
+
+            // Player buffs
+            const buffContainer = document.getElementById('playerBuffs');
+            if (buffContainer) {
+                buffContainer.innerHTML = '';
+                gameState.player.buffs.forEach((buffData, buffName) => {
+                    const buffElement = document.createElement('div');
+                    const buffTypeClass = buffData.type === 'debuff' ? 'debuff' : 'buff';
+                    buffElement.className = `buff-icon ${buffTypeClass}`;
+                    buffElement.textContent = buffData.icon || '★';
+                    buffElement.title = buffName.charAt(0).toUpperCase() + buffName.slice(1);
+
+                    const timer = document.createElement('div');
+                    timer.className = 'buff-timer';
+                    const remaining = Math.max(0, buffData.remaining);
+                    timer.textContent = Math.ceil(remaining).toString();
+                    buffElement.appendChild(timer);
+
+                    buffContainer.appendChild(buffElement);
+                });
+            }
+
             // Update ability cooldowns
             const abilityElements = document.querySelectorAll('.ability');
             abilityElements.forEach((element, index) => {
