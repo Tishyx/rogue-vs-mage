@@ -548,7 +548,12 @@
                     ],
                     shield: 0,
                     aiState: 'aggressive',
-                    lastAbilityTime: 0
+                    lastAbilityTime: 0,
+                    awareness: 1,
+                    lastKnownPlayerPos: null,
+                    detectCooldown: 0,
+                    searchTimer: 0,
+                    patrolAngle: 0
                 }
             ],
             currentTarget: 0,
@@ -1109,11 +1114,64 @@
                 return;
             }
 
-            const distance = enemy.position.distanceTo(gameState.player.position);
-            const toPlayer = gameState.player.position.clone().sub(enemy.position).normalize();
+            enemy.detectCooldown = Math.max(0, (enemy.detectCooldown || 0) - deltaTime);
+            if (typeof enemy.awareness !== 'number') enemy.awareness = 0;
+            if (typeof enemy.searchTimer !== 'number') enemy.searchTimer = 0;
+            if (typeof enemy.patrolAngle !== 'number') enemy.patrolAngle = 0;
 
-            // Face the player
-            enemy.rotation = Math.atan2(toPlayer.x, toPlayer.z);
+            const toPlayerVector = gameState.player.position.clone().sub(enemy.position);
+            const distanceToPlayer = toPlayerVector.length();
+            const directionToPlayer = distanceToPlayer > 0 ? toPlayerVector.clone().normalize() : new THREE.Vector3(0, 0, 0);
+
+            let playerVisible = !gameState.player.isStealthed;
+            if (gameState.player.isStealthed) {
+                const forward = new THREE.Vector3(Math.sin(enemy.rotation), 0, Math.cos(enemy.rotation));
+                const dot = forward.dot(directionToPlayer);
+                const angle = directionToPlayer.lengthSq() === 0 ? Math.PI : Math.acos(THREE.MathUtils.clamp(dot, -1, 1));
+                const withinView = angle < Math.PI / 3;
+                const closeEnough = distanceToPlayer < 4;
+
+                if (closeEnough) {
+                    enemy.awareness = Math.min(1, enemy.awareness + deltaTime * 2);
+                } else if (withinView && distanceToPlayer < 12) {
+                    enemy.awareness = Math.min(1, enemy.awareness + deltaTime);
+                } else {
+                    enemy.awareness = Math.max(0, enemy.awareness - deltaTime * 0.5);
+                }
+
+                playerVisible = closeEnough || (withinView && enemy.awareness > 0.6);
+                if (playerVisible) {
+                    enemy.lastKnownPlayerPos = gameState.player.position.clone();
+                }
+            } else {
+                enemy.awareness = 1;
+                playerVisible = true;
+                enemy.lastKnownPlayerPos = gameState.player.position.clone();
+                enemy.searchTimer = 0;
+                enemy.patrolAngle = 0;
+            }
+
+            let targetDirection = null;
+            let targetDistance = Infinity;
+
+            if (playerVisible) {
+                targetDirection = directionToPlayer.clone();
+                targetDistance = distanceToPlayer;
+                enemy.aiState = 'aggressive';
+                enemy.searchTimer = 0;
+                enemy.patrolAngle = 0;
+            } else if (enemy.lastKnownPlayerPos) {
+                const toLastKnown = enemy.lastKnownPlayerPos.clone().sub(enemy.position);
+                targetDistance = toLastKnown.length();
+                targetDirection = targetDistance > 0 ? toLastKnown.normalize() : null;
+                enemy.aiState = 'searching';
+            } else {
+                enemy.aiState = 'alert';
+            }
+
+            if (targetDirection) {
+                enemy.rotation = Math.atan2(targetDirection.x, targetDirection.z);
+            }
 
             // Root duration
             if (enemy.isRooted) {
@@ -1149,57 +1207,71 @@
             const now = Date.now() / 1000;
             if (now - enemy.lastAbilityTime > 1) { // AI thinks every second
 
-                // Ice Barrier when low health
-                if (enemy.health < 40 && enemy.abilities[3].cooldown <= 0 && enemy.mana >= 50) {
-                    enemy.shield = 40;
-                    enemy.mana -= 50;
-                    enemy.abilities[3].cooldown = enemy.abilities[3].maxCooldown;
-                    addCombatMessage(`${getEnemyName(enemy)} casts Ice Barrier!`, 'buff');
-                    createParticleEffect(enemy.position, 'frost');
-                }
-                // Frost Nova when player is close
-                else if (distance < 5 && enemy.abilities[1].cooldown <= 0 && enemy.mana >= 40) {
-                    // Frost Nova
-                    gameState.player.velocity.set(0, 0, 0);
-                    gameState.player.isRooted = true;
-                    gameState.player.rootDuration = 3;
-                    gameState.player.health -= 15;
-                    enemy.mana -= 40;
-                    enemy.abilities[1].cooldown = enemy.abilities[1].maxCooldown;
-                    createParticleEffect(gameState.player.position, 'frost');
-                    addCombatMessage(`${getEnemyName(enemy)} casts Frost Nova! You are frozen!`, 'damage');
+                if (gameState.player.isStealthed) {
+                    const coneOfCold = enemy.abilities[4];
+                    if (playerVisible && coneOfCold && coneOfCold.cooldown <= 0 && enemy.detectCooldown <= 0 && enemy.mana >= (coneOfCold.cost || 0)) {
+                        enemy.mana -= coneOfCold.cost || 0;
+                        coneOfCold.cooldown = coneOfCold.maxCooldown || 0;
+                        enemy.detectCooldown = 4;
+                        createParticleEffect(enemy.position, 'frost');
+                        addCombatMessage(`${getEnemyName(enemy)} sweeps the area with Cone of Cold, revealing you!`, 'ability-use');
+                        removePlayerBuff('stealth');
+                        gameState.player.isStealthed = false;
+                        enemy.awareness = 1;
+                        enemy.lastKnownPlayerPos = gameState.player.position.clone();
+                    }
+                } else {
+                    // Ice Barrier when low health
+                    if (enemy.health < 40 && enemy.abilities[3].cooldown <= 0 && enemy.mana >= 50) {
+                        enemy.shield = 40;
+                        enemy.mana -= 50;
+                        enemy.abilities[3].cooldown = enemy.abilities[3].maxCooldown;
+                        addCombatMessage(`${getEnemyName(enemy)} casts Ice Barrier!`, 'buff');
+                        createParticleEffect(enemy.position, 'frost');
+                    }
+                    // Frost Nova when player is close
+                    else if (playerVisible && distanceToPlayer < 5 && enemy.abilities[1].cooldown <= 0 && enemy.mana >= 40) {
+                        gameState.player.velocity.set(0, 0, 0);
+                        gameState.player.isRooted = true;
+                        gameState.player.rootDuration = 3;
+                        gameState.player.health -= 15;
+                        enemy.mana -= 40;
+                        enemy.abilities[1].cooldown = enemy.abilities[1].maxCooldown;
+                        createParticleEffect(gameState.player.position, 'frost');
+                        addCombatMessage(`${getEnemyName(enemy)} casts Frost Nova! You are frozen!`, 'damage');
 
-                    // Blink away after nova
-                    setTimeout(() => {
-                        if (enemy.abilities[2].cooldown <= 0 && enemy.mana >= 20) {
-                            const blinkDirection = toPlayer.clone().multiplyScalar(-15);
-                            enemy.position.add(blinkDirection);
-                            enemy.mana -= 20;
-                            enemy.abilities[2].cooldown = enemy.abilities[2].maxCooldown;
-                            addCombatMessage(`${getEnemyName(enemy)} blinks away!`, 'ability-use');
-                            createParticleEffect(enemy.position, 'frost');
+                        // Blink away after nova
+                        setTimeout(() => {
+                            if (enemy.abilities[2].cooldown <= 0 && enemy.mana >= 20) {
+                                const blinkDirection = directionToPlayer.clone().multiplyScalar(-15);
+                                enemy.position.add(blinkDirection);
+                                enemy.mana -= 20;
+                                enemy.abilities[2].cooldown = enemy.abilities[2].maxCooldown;
+                                addCombatMessage(`${getEnemyName(enemy)} blinks away!`, 'ability-use');
+                                createParticleEffect(enemy.position, 'frost');
+                            }
+                        }, 100);
+                    }
+                    // Cone of Cold at mid range
+                    else if (playerVisible && distanceToPlayer < 8 && distanceToPlayer > 3 && enemy.abilities[4].cooldown <= 0 && enemy.mana >= 35) {
+                        gameState.player.health -= 25;
+                        enemy.mana -= 35;
+                        enemy.abilities[4].cooldown = enemy.abilities[4].maxCooldown;
+                        createParticleEffect(gameState.player.position, 'frost');
+                        addCombatMessage(`${getEnemyName(enemy)} casts Cone of Cold for 25 damage!`, 'damage');
+                    }
+                    // Frostbolt as default
+                    else if (playerVisible) {
+                        const frostbolt = enemy.abilities[0];
+                        if (frostbolt && enemy.mana >= (frostbolt.cost || 0) && frostbolt.castTime) {
+                            enemy.isCasting = true;
+                            enemy.castTime = frostbolt.castTime;
+                            enemy.castDuration = frostbolt.castTime;
+                            enemy.castCost = frostbolt.cost || 0;
+                            enemy.currentCast = frostbolt.name;
+                            showEnemyCastBar(frostbolt.name, frostbolt.castTime);
+                            addCombatMessage(`${getEnemyName(enemy)} begins casting ${frostbolt.name}...`, 'ability-use');
                         }
-                    }, 100);
-                }
-                // Cone of Cold at mid range
-                else if (distance < 8 && distance > 3 && enemy.abilities[4].cooldown <= 0 && enemy.mana >= 35) {
-                    gameState.player.health -= 25;
-                    enemy.mana -= 35;
-                    enemy.abilities[4].cooldown = enemy.abilities[4].maxCooldown;
-                    createParticleEffect(gameState.player.position, 'frost');
-                    addCombatMessage(`${getEnemyName(enemy)} casts Cone of Cold for 25 damage!`, 'damage');
-                }
-                // Frostbolt as default
-                else if (!gameState.player.isStealthed) {
-                    const frostbolt = enemy.abilities[0];
-                    if (frostbolt && enemy.mana >= (frostbolt.cost || 0) && frostbolt.castTime) {
-                        enemy.isCasting = true;
-                        enemy.castTime = frostbolt.castTime;
-                        enemy.castDuration = frostbolt.castTime;
-                        enemy.castCost = frostbolt.cost || 0;
-                        enemy.currentCast = frostbolt.name;
-                        showEnemyCastBar(frostbolt.name, frostbolt.castTime);
-                        addCombatMessage(`${getEnemyName(enemy)} begins casting ${frostbolt.name}...`, 'ability-use');
                     }
                 }
 
@@ -1208,16 +1280,39 @@
 
             // Movement
             if (!enemy.isRooted && !enemy.isCasting) {
-                if (distance > 20) {
-                    // Move closer
-                    enemy.velocity = toPlayer.clone().multiplyScalar(3);
-                } else if (distance < 8) {
-                    // Kite away
-                    enemy.velocity = toPlayer.clone().multiplyScalar(-2);
+                if (playerVisible && targetDirection) {
+                    if (distanceToPlayer > 20) {
+                        enemy.velocity = targetDirection.clone().multiplyScalar(3);
+                    } else if (distanceToPlayer < 8) {
+                        enemy.velocity = targetDirection.clone().multiplyScalar(-2);
+                    } else {
+                        const strafe = new THREE.Vector3(-targetDirection.z, 0, targetDirection.x);
+                        enemy.velocity = strafe.multiplyScalar(Math.sin(now * 2) * 2);
+                    }
+                } else if (!playerVisible && enemy.lastKnownPlayerPos && targetDirection) {
+                    if (targetDistance > 1.5) {
+                        enemy.velocity = targetDirection.clone().multiplyScalar(2.5);
+                    } else {
+                        enemy.searchTimer += deltaTime;
+                        enemy.patrolAngle += deltaTime * 1.5;
+                        const patrolOffset = new THREE.Vector3(Math.cos(enemy.patrolAngle), 0, Math.sin(enemy.patrolAngle)).multiplyScalar(2);
+                        const patrolTarget = enemy.lastKnownPlayerPos.clone().add(patrolOffset);
+                        const toPatrol = patrolTarget.sub(enemy.position);
+                        if (toPatrol.lengthSq() > 0.01) {
+                            enemy.velocity = toPatrol.normalize().multiplyScalar(1.5);
+                            enemy.rotation = Math.atan2(enemy.velocity.x, enemy.velocity.z);
+                        } else {
+                            enemy.velocity.set(0, 0, 0);
+                        }
+
+                        if (enemy.searchTimer > 6) {
+                            enemy.lastKnownPlayerPos = null;
+                            enemy.searchTimer = 0;
+                            enemy.patrolAngle = 0;
+                        }
+                    }
                 } else {
-                    // Strafe
-                    const strafe = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
-                    enemy.velocity = strafe.multiplyScalar(Math.sin(now * 2) * 2);
+                    enemy.velocity.multiplyScalar(0.8);
                 }
             } else {
                 enemy.velocity.set(0, 0, 0);
