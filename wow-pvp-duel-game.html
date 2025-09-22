@@ -556,7 +556,14 @@
                 pitch: 0,
                 yaw: 0,
                 distance: 15,
-                height: 5
+                targetDistance: 15,
+                minDistance: 8,
+                maxDistance: 25,
+                zoomSpeed: 5,
+                height: 5,
+                targetHeight: 5,
+                heightRatio: 5 / 15,
+                defaultDistance: 15
             },
             input: {
                 keys: {},
@@ -927,6 +934,29 @@
                 gameState.camera.pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, gameState.camera.pitch));
             }
         });
+
+        renderer.domElement.addEventListener('wheel', (event) => {
+            event.preventDefault();
+
+            const cameraState = gameState.camera;
+
+            if (event.buttons === 4) {
+                cameraState.targetDistance = THREE.MathUtils.clamp(
+                    cameraState.defaultDistance,
+                    cameraState.minDistance,
+                    cameraState.maxDistance
+                );
+            } else {
+                const zoomDelta = event.deltaY * 0.01;
+                cameraState.targetDistance = THREE.MathUtils.clamp(
+                    cameraState.targetDistance + zoomDelta,
+                    cameraState.minDistance,
+                    cameraState.maxDistance
+                );
+            }
+
+            cameraState.targetHeight = cameraState.heightRatio * cameraState.targetDistance;
+        }, { passive: false });
 
         document.addEventListener('click', (event) => {
             if (event.target.closest('.ability')) {
@@ -1357,14 +1387,31 @@
             });
         }
 
-        function updateCamera() {
+        function updateCamera(deltaTime) {
             // Third-person camera
-            const cameraOffset = new THREE.Vector3(
-                Math.sin(gameState.camera.yaw) * gameState.camera.distance,
-                gameState.camera.height + Math.sin(gameState.camera.pitch) * 10,
-                Math.cos(gameState.camera.yaw) * gameState.camera.distance
+            const cameraState = gameState.camera;
+            const lerpFactor = 1 - Math.exp(-cameraState.zoomSpeed * deltaTime);
+
+            cameraState.distance = THREE.MathUtils.lerp(
+                cameraState.distance,
+                cameraState.targetDistance,
+                lerpFactor
             );
-            
+
+            cameraState.targetHeight = cameraState.heightRatio * cameraState.targetDistance;
+            const desiredHeight = cameraState.targetHeight;
+            cameraState.height = THREE.MathUtils.lerp(
+                cameraState.height,
+                desiredHeight,
+                lerpFactor
+            );
+
+            const cameraOffset = new THREE.Vector3(
+                Math.sin(cameraState.yaw) * cameraState.distance,
+                cameraState.height + Math.sin(cameraState.pitch) * 10,
+                Math.cos(cameraState.yaw) * cameraState.distance
+            );
+
             camera.position.copy(gameState.player.position).add(cameraOffset);
             camera.lookAt(gameState.player.position.clone().add(new THREE.Vector3(0, 2, 0)));
         }
@@ -1495,7 +1542,7 @@
             // Update particles
             gameState.particles = gameState.particles.filter(particle => particle.update(deltaTime));
             
-            updateCamera();
+            updateCamera(deltaTime);
             updateUI();
             
             renderer.render(scene, camera);
