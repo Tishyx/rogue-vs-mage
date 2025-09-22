@@ -330,6 +330,8 @@
                 energy: 100,
                 maxEnergy: 100,
                 isStealthed: false,
+                isRooted: false,
+                rootDuration: 0,
                 buffs: {},
                 inCombat: false,
                 abilities: [
@@ -681,8 +683,8 @@
                 else if (distance < 5 && gameState.enemy.abilities[1].cooldown <= 0 && gameState.enemy.mana >= 40) {
                     // Frost Nova
                     gameState.player.velocity.set(0, 0, 0);
-                    gameState.enemy.isRooted = true;
-                    gameState.enemy.rootDuration = 3;
+                    gameState.player.isRooted = true;
+                    gameState.player.rootDuration = 3;
                     gameState.player.health -= 15;
                     gameState.enemy.mana -= 40;
                     gameState.enemy.abilities[1].cooldown = gameState.enemy.abilities[1].maxCooldown;
@@ -766,30 +768,40 @@
             const moveSpeed = gameState.player.buffs.sprint ? 15 : (gameState.player.buffs.slow ? 5 : 8);
             
             // Movement
-            let moveX = 0, moveZ = 0;
-            if (keys['w']) moveZ = -1;
-            if (keys['s']) moveZ = 1;
-            if (keys['a']) moveX = -1;
-            if (keys['d']) moveX = 1;
-            
-            if (moveX !== 0 || moveZ !== 0) {
-                const moveDir = new THREE.Vector3(moveX, 0, moveZ).normalize();
-                
-                // Rotate movement based on camera yaw
-                const rotatedX = moveDir.x * Math.cos(gameState.camera.yaw) - moveDir.z * Math.sin(gameState.camera.yaw);
-                const rotatedZ = moveDir.x * Math.sin(gameState.camera.yaw) + moveDir.z * Math.cos(gameState.camera.yaw);
-                
-                gameState.player.velocity.x = rotatedX * moveSpeed;
-                gameState.player.velocity.z = rotatedZ * moveSpeed;
-                
-                // Break stealth on movement
-                if (gameState.player.isStealthed && (Math.abs(moveX) > 0 || Math.abs(moveZ) > 0)) {
-                    // Allow some movement in stealth but slower
-                    gameState.player.velocity.multiplyScalar(0.5);
+            if (gameState.player.isRooted) {
+                gameState.player.velocity.x = 0;
+                gameState.player.velocity.z = 0;
+                gameState.player.rootDuration -= deltaTime;
+                if (gameState.player.rootDuration <= 0) {
+                    gameState.player.isRooted = false;
+                    gameState.player.rootDuration = 0;
                 }
             } else {
-                gameState.player.velocity.x *= 0.8;
-                gameState.player.velocity.z *= 0.8;
+                let moveX = 0, moveZ = 0;
+                if (keys['w']) moveZ = -1;
+                if (keys['s']) moveZ = 1;
+                if (keys['a']) moveX = -1;
+                if (keys['d']) moveX = 1;
+
+                if (moveX !== 0 || moveZ !== 0) {
+                    const moveDir = new THREE.Vector3(moveX, 0, moveZ).normalize();
+
+                    // Rotate movement based on camera yaw
+                    const rotatedX = moveDir.x * Math.cos(gameState.camera.yaw) - moveDir.z * Math.sin(gameState.camera.yaw);
+                    const rotatedZ = moveDir.x * Math.sin(gameState.camera.yaw) + moveDir.z * Math.cos(gameState.camera.yaw);
+
+                    gameState.player.velocity.x = rotatedX * moveSpeed;
+                    gameState.player.velocity.z = rotatedZ * moveSpeed;
+
+                    // Break stealth on movement
+                    if (gameState.player.isStealthed && (Math.abs(moveX) > 0 || Math.abs(moveZ) > 0)) {
+                        // Allow some movement in stealth but slower
+                        gameState.player.velocity.multiplyScalar(0.5);
+                    }
+                } else {
+                    gameState.player.velocity.x *= 0.8;
+                    gameState.player.velocity.z *= 0.8;
+                }
             }
             
             // Jump
