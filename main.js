@@ -765,6 +765,15 @@ const gltfLoader = new THREE.GLTFLoader();
 
 const clothingTextureCache = new Map();
 
+const environmentEffectState = {
+    group: new THREE.Group(),
+    dustSystems: [],
+    volumetricLights: [],
+    typeMap: {},
+    initialized: false
+};
+scene.add(environmentEffectState.group);
+
 function loadTextureWithOptions(url, options = {}) {
     if (!url) {
         return null;
@@ -919,6 +928,356 @@ function scatterInstancedMeshes({
     mesh.instanceMatrix.needsUpdate = true;
     scene.add(mesh);
     return mesh;
+}
+
+function createSoftParticleTexture(size = 128) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.05, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    gradient.addColorStop(0.45, 'rgba(255, 255, 255, 0.35)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.needsUpdate = true;
+    return texture;
+}
+
+function createEnvironmentEffects() {
+    if (environmentEffectState.initialized) {
+        return environmentEffectState;
+    }
+
+    environmentEffectState.group.name = 'environmentEffects';
+    environmentEffectState.initialized = true;
+    environmentEffectState.dustSystems.length = 0;
+    environmentEffectState.volumetricLights.length = 0;
+
+    const particleTexture = createSoftParticleTexture();
+
+    const dustLayers = [
+        {
+            count: 320,
+            radius: 34,
+            minY: 0.25,
+            height: 3.8,
+            speedRange: [0.6, 1.05],
+            size: 0.55,
+            color: 0xc7bba2,
+            opacity: 0.42
+        },
+        {
+            count: 220,
+            radius: 30,
+            minY: 2.6,
+            height: 6.4,
+            speedRange: [0.28, 0.55],
+            size: 0.72,
+            color: 0xa2b1c6,
+            opacity: 0.38
+        },
+        {
+            count: 160,
+            radius: 24,
+            minY: 5.5,
+            height: 9.5,
+            speedRange: [0.14, 0.34],
+            size: 0.95,
+            color: 0x8b7cae,
+            opacity: 0.32
+        }
+    ];
+
+    dustLayers.forEach((layer, index) => {
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(layer.count * 3);
+        const speeds = new Float32Array(layer.count);
+
+        for (let i = 0; i < layer.count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * layer.radius;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            const y = layer.minY + Math.random() * layer.height;
+
+            const idx = i * 3;
+            positions[idx] = x;
+            positions[idx + 1] = y;
+            positions[idx + 2] = z;
+
+            speeds[i] = THREE.MathUtils.lerp(layer.speedRange[0], layer.speedRange[1], Math.random());
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.computeBoundingSphere();
+
+        const material = new THREE.PointsMaterial({
+            size: layer.size,
+            transparent: true,
+            opacity: layer.opacity,
+            map: particleTexture,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            color: new THREE.Color(layer.color)
+        });
+
+        const points = new THREE.Points(geometry, material);
+        points.renderOrder = -10 + index;
+        points.frustumCulled = true;
+        points.matrixAutoUpdate = false;
+        points.updateMatrix();
+
+        environmentEffectState.group.add(points);
+        environmentEffectState.dustSystems.push({
+            geometry,
+            material,
+            points,
+            speeds,
+            minY: layer.minY,
+            height: layer.height,
+            maxY: layer.minY + layer.height
+        });
+    });
+
+    const fallbackEnemyTarget = gameState.enemies[0]?.position
+        ? gameState.enemies[0].position.clone()
+        : new THREE.Vector3(0, 1, -8);
+    const fallbackPlayerTarget = gameState.player.position.clone();
+
+    const volumetricConfigs = [
+        {
+            key: 'frost',
+            color: 0x7cc9ff,
+            position: new THREE.Vector3(-8, 13.5, -9),
+            target: fallbackEnemyTarget,
+            angle: Math.PI / 5,
+            intensity: 1.05,
+            distance: 52,
+            penumbra: 0.65,
+            coneHeight: 18,
+            coneRadius: 7,
+            coneOpacity: 0.42,
+            waveFrequency: 0.45,
+            waveAmplitude: 0.12,
+            pulseDecay: 1.4,
+            coneIntensityScale: 0.32,
+            targetProvider: () => gameState.enemies[0]?.position || null
+        },
+        {
+            key: 'arcane',
+            color: 0xc39dff,
+            position: new THREE.Vector3(7, 13.8, -7),
+            target: fallbackEnemyTarget.clone().add(new THREE.Vector3(1, 0, 0)),
+            angle: Math.PI / 4.5,
+            intensity: 0.85,
+            distance: 50,
+            penumbra: 0.55,
+            coneHeight: 16,
+            coneRadius: 6,
+            coneOpacity: 0.36,
+            waveFrequency: 0.6,
+            waveAmplitude: 0.1,
+            pulseDecay: 1.2,
+            coneIntensityScale: 0.35,
+            targetProvider: () => gameState.enemies[0]?.position || null
+        },
+        {
+            key: 'shadow',
+            color: 0x6d3a7c,
+            position: new THREE.Vector3(0, 12.5, 7),
+            target: fallbackPlayerTarget,
+            angle: Math.PI / 4.2,
+            intensity: 0.7,
+            distance: 44,
+            penumbra: 0.5,
+            coneHeight: 14,
+            coneRadius: 6.5,
+            coneOpacity: 0.34,
+            waveFrequency: 0.5,
+            waveAmplitude: 0.08,
+            pulseDecay: 1.1,
+            coneIntensityScale: 0.4,
+            targetProvider: () => gameState.player.position || null
+        }
+    ];
+
+    volumetricConfigs.forEach(config => {
+        const spotlight = new THREE.SpotLight(config.color, config.intensity, config.distance, config.angle, config.penumbra, 1.6);
+        spotlight.castShadow = false;
+        spotlight.position.copy(config.position);
+        spotlight.decay = 1.4;
+        spotlight.name = `${config.key}-volumetric-light`;
+
+        const targetObject = new THREE.Object3D();
+        targetObject.position.copy(config.target);
+        scene.add(targetObject);
+        spotlight.target = targetObject;
+        scene.add(spotlight);
+
+        const helper = new THREE.SpotLightHelper(spotlight, config.color);
+        if (helper.material) {
+            helper.material.transparent = true;
+            helper.material.opacity = 0.2;
+        }
+        scene.add(helper);
+
+        const coneGeometry = new THREE.ConeGeometry(config.coneRadius, config.coneHeight, 32, 1, true);
+        coneGeometry.translate(0, -config.coneHeight / 2, 0);
+        const coneMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                color: { value: new THREE.Color(config.color) },
+                intensity: { value: config.intensity * config.coneIntensityScale },
+                coneHeight: { value: config.coneHeight },
+                maxRadius: { value: config.coneRadius },
+                time: { value: 0 }
+            },
+            vertexShader: `varying float vHeight;\n` +
+                `varying float vRadius;\n` +
+                `void main() {\n` +
+                `    vHeight = position.y;\n` +
+                `    vRadius = length(position.xz);\n` +
+                `    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n` +
+                `}`,
+            fragmentShader: `uniform vec3 color;\n` +
+                `uniform float intensity;\n` +
+                `uniform float coneHeight;\n` +
+                `uniform float maxRadius;\n` +
+                `uniform float time;\n` +
+                `varying float vHeight;\n` +
+                `varying float vRadius;\n` +
+                `void main() {\n` +
+                `    float heightFactor = clamp(1.0 - (vHeight / coneHeight), 0.0, 1.0);\n` +
+                `    float radiusFactor = clamp(1.0 - (vRadius / maxRadius), 0.0, 1.0);\n` +
+                `    float flicker = 0.2 + 0.8 * abs(sin((vHeight * 0.45) + time * 0.6));\n` +
+                `    float alpha = intensity * heightFactor * radiusFactor * flicker;\n` +
+                `    if (alpha < 0.01) discard;\n` +
+                `    gl_FragColor = vec4(color, alpha);\n` +
+                `}`,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        const coneMesh = new THREE.Mesh(coneGeometry, coneMaterial);
+        coneMesh.rotation.x = Math.PI;
+        coneMesh.frustumCulled = false;
+        coneMesh.renderOrder = -5;
+
+        const coneGroup = new THREE.Group();
+        coneGroup.name = `${config.key}-volumetric-cone`;
+        coneGroup.position.copy(config.position);
+        coneGroup.add(coneMesh);
+        coneGroup.lookAt(config.target);
+        environmentEffectState.group.add(coneGroup);
+
+        environmentEffectState.volumetricLights.push({
+            key: config.key,
+            spotlight,
+            helper,
+            coneGroup,
+            coneMaterial,
+            coneIntensityScale: config.coneIntensityScale,
+            baseIntensity: config.intensity,
+            currentIntensity: config.intensity,
+            pulse: 0,
+            maxPulse: 1.5,
+            pulseDecay: config.pulseDecay,
+            waveFrequency: config.waveFrequency,
+            waveAmplitude: config.waveAmplitude,
+            elapsed: 0,
+            targetProvider: config.targetProvider,
+            targetObject
+        });
+    });
+
+    environmentEffectState.typeMap = {
+        'arcane': 'arcane',
+        'arcane-missiles': 'arcane',
+        'arcaneImpact': 'arcane',
+        'blink': 'arcane',
+        'frost': 'frost',
+        'frost-cast': 'frost',
+        'frost-field': 'frost',
+        'frost-cone': 'frost',
+        'cone-of-cold': 'frost',
+        'shadow': 'shadow',
+        'shadow-strike': 'shadow',
+        'directional-slash': 'shadow',
+        'stealth-entry': 'shadow',
+        'finisher': 'shadow',
+        'speed-trail': 'shadow',
+        'defensive-shield': 'arcane'
+    };
+
+    return environmentEffectState;
+}
+
+function updateEnvironmentEffects(deltaTime) {
+    if (!environmentEffectState.initialized) {
+        return;
+    }
+
+    environmentEffectState.dustSystems.forEach(system => {
+        const { geometry, speeds, minY, height, maxY } = system;
+        const positionAttr = geometry.getAttribute('position');
+        const array = positionAttr.array;
+        for (let i = 0; i < speeds.length; i++) {
+            const idx = i * 3 + 1;
+            let y = array[idx] + deltaTime * speeds[i];
+            if (y > maxY) {
+                const wrapped = (y - minY) % height;
+                y = minY + wrapped;
+            }
+            array[idx] = y;
+        }
+        positionAttr.needsUpdate = true;
+    });
+
+    environmentEffectState.volumetricLights.forEach(light => {
+        light.elapsed += deltaTime;
+        light.pulse = Math.max(0, light.pulse - light.pulseDecay * deltaTime);
+        const wave = Math.sin(light.elapsed * light.waveFrequency) * light.waveAmplitude;
+        const targetIntensity = light.baseIntensity + wave + light.pulse;
+        light.currentIntensity = THREE.MathUtils.lerp(light.currentIntensity, targetIntensity, 0.15);
+        light.spotlight.intensity = light.currentIntensity;
+        light.coneMaterial.uniforms.intensity.value = light.currentIntensity * light.coneIntensityScale;
+        light.coneMaterial.uniforms.time.value += deltaTime;
+        if (typeof light.targetProvider === 'function') {
+            const targetPosition = light.targetProvider();
+            if (targetPosition) {
+                light.targetObject.position.copy(targetPosition);
+                light.spotlight.target.updateMatrixWorld();
+                light.coneGroup.lookAt(targetPosition);
+            }
+        }
+
+        if (light.helper && typeof light.helper.update === 'function') {
+            light.helper.update();
+        }
+    });
+}
+
+function pulseVolumetricLight(effectType, strength = 0.9) {
+    if (!environmentEffectState.initialized || !effectType) {
+        return;
+    }
+
+    const key = environmentEffectState.typeMap[effectType] || effectType;
+    environmentEffectState.volumetricLights.forEach(light => {
+        if (light.key === key) {
+            light.pulse = Math.min(light.maxPulse, light.pulse + strength);
+        }
+    });
 }
 
 function createArenaPillars(radius = 32, pillarCount = 8) {
@@ -1099,6 +1458,8 @@ function initEnvironment() {
     ground.receiveShadow = true;
     ground.name = 'arenaGround';
     scene.add(ground);
+
+    createEnvironmentEffects();
 
     applyHeightMapToGeometry(groundGeometry, environmentTextures.terrain.height, 7).then(sampler => {
         terrainHeightSampler = sampler || ((x, z) => 0);
@@ -2410,6 +2771,16 @@ function triggerVisualEffect(ability, context = {}) {
         ? context.position.clone()
         : context.position || (context.target && context.target.position ? context.target.position.clone() : (context.origin ? context.origin.clone() : new THREE.Vector3()));
 
+    if (effect?.type) {
+        pulseVolumetricLight(effect.type);
+    }
+    if (effect?.category) {
+        pulseVolumetricLight(effect.category, 0.7);
+    }
+    if (context.fallbackType) {
+        pulseVolumetricLight(context.fallbackType, 0.6);
+    }
+
     switch (effect.type) {
         case 'stealth-entry':
             createStealthEntryEffect(basePosition, effect);
@@ -2469,6 +2840,8 @@ function triggerVisualEffect(ability, context = {}) {
 }
 
 function createParticleEffect(position, type, options = {}) {
+    pulseVolumetricLight(type);
+
     switch (type) {
         case 'frost':
             createFrostBurstEffect(position, options);
@@ -3617,6 +3990,8 @@ function animate(currentTime) {
 
         updateCamera(deltaTime);
     }
+
+    updateEnvironmentEffects(effectDelta);
 
     updateUI();
 
