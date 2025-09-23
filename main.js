@@ -756,6 +756,32 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const composer = new THREE.EffectComposer(renderer);
+composer.setPixelRatio(window.devicePixelRatio || 1);
+composer.setSize(window.innerWidth, window.innerHeight);
+
+const renderPass = new THREE.RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+const ssaoPass = new THREE.SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+ssaoPass.kernelRadius = 14;
+ssaoPass.minDistance = 0.0008;
+ssaoPass.maxDistance = 0.18;
+ssaoPass.output = THREE.SSAOPass.OUTPUT.Default;
+composer.addPass(ssaoPass);
+
+const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.45, 0.35, 0.9);
+bloomPass.threshold = 0.82;
+bloomPass.strength = 0.4;
+bloomPass.radius = 0.55;
+composer.addPass(bloomPass);
+
+const gammaPass = new THREE.ShaderPass(THREE.GammaCorrectionShader);
+gammaPass.renderToScreen = true;
+composer.addPass(gammaPass);
 
 const textureLoader = new THREE.TextureLoader();
 textureLoader.setCrossOrigin('anonymous');
@@ -3995,15 +4021,23 @@ function animate(currentTime) {
 
     updateUI();
 
-    renderer.render(scene, camera);
+    composer.render();
 }
 
 // Handle window resize
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+function onWindowResize() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
+    renderer.setSize(width, height);
+    composer.setSize(width, height);
+    composer.setPixelRatio(window.devicePixelRatio || 1);
+    ssaoPass.setSize(width, height);
+    bloomPass.setSize(width, height);
+}
+
+window.addEventListener('resize', onWindowResize);
 
 // UI initialization
 initializeAbilityUI();
