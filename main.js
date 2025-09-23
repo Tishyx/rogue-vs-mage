@@ -295,7 +295,11 @@ const gameState = {
     input: {
         keys: {},
         mouseX: 0,
-        mouseY: 0
+        mouseY: 0,
+        mouseButtons: {
+            left: false,
+            right: false
+        }
     },
     gameOver: false,
     isPaused: false,
@@ -2973,6 +2977,38 @@ document.addEventListener('keyup', (e) => {
     gameState.input.keys[e.key.toLowerCase()] = false;
 });
 
+document.addEventListener('mousedown', (e) => {
+    if (gameState.isPaused || gameState.gameOver) {
+        return;
+    }
+
+    const buttons = gameState.input.mouseButtons;
+    if (e.button === 0) {
+        buttons.left = true;
+    } else if (e.button === 2) {
+        e.preventDefault();
+        buttons.right = true;
+        if (document.pointerLockElement !== document.body) {
+            document.body.requestPointerLock();
+        }
+    }
+});
+
+document.addEventListener('mouseup', (e) => {
+    const buttons = gameState.input.mouseButtons;
+    if (e.button === 0) {
+        buttons.left = false;
+    } else if (e.button === 2) {
+        buttons.right = false;
+    }
+});
+
+document.addEventListener('contextmenu', (e) => {
+    if (document.pointerLockElement === document.body || e.target === document.body) {
+        e.preventDefault();
+    }
+});
+
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === document.body) {
         gameState.camera.yaw -= e.movementX * 0.002;
@@ -3515,46 +3551,88 @@ function completeCast() {
 }
 
 // Update functions
+function normalizeAngle(angle) {
+    return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
 function updatePlayer(deltaTime) {
+    const player = gameState.player;
     const keys = gameState.input.keys;
-    const hasSprint = gameState.player.buffs.has('sprint');
-    const hasSlow = gameState.player.buffs.has('slow');
+    const hasSprint = player.buffs.has('sprint');
+    const hasSlow = player.buffs.has('slow');
     const moveSpeed = hasSprint ? 15 : (hasSlow ? 5 : 8);
+    const backwardSpeed = moveSpeed * 0.7;
+    const strafeSpeed = moveSpeed;
+    const turnSpeed = Math.PI * 1.5;
+    const mouseButtons = gameState.input.mouseButtons || {};
+    const rightMouseDown = !!mouseButtons.right;
 
     // Movement
-    if (gameState.player.isRooted) {
-        gameState.player.velocity.x = 0;
-        gameState.player.velocity.z = 0;
-        gameState.player.rootDuration -= deltaTime;
-        if (gameState.player.rootDuration <= 0) {
-            gameState.player.isRooted = false;
-            gameState.player.rootDuration = 0;
+    if (player.isRooted) {
+        player.velocity.x = 0;
+        player.velocity.z = 0;
+        player.rootDuration -= deltaTime;
+        if (player.rootDuration <= 0) {
+            player.isRooted = false;
+            player.rootDuration = 0;
         }
     } else {
-        let moveX = 0, moveZ = 0;
-        if (keys['w']) moveZ = -1;
-        if (keys['s']) moveZ = 1;
-        if (keys['a']) moveX = -1;
-        if (keys['d']) moveX = 1;
+        let forward = 0;
+        if (keys['w']) forward += 1;
+        if (keys['s']) forward -= 1;
 
-        if (moveX !== 0 || moveZ !== 0) {
-            const moveDir = new THREE.Vector3(moveX, 0, moveZ).normalize();
+        let strafe = 0;
+        if (keys['q']) strafe -= 1;
+        if (keys['e']) strafe += 1;
+        if (rightMouseDown) {
+            if (keys['a']) strafe -= 1;
+            if (keys['d']) strafe += 1;
+        }
 
-            // Rotate movement based on camera yaw
-            const rotatedX = moveDir.x * Math.cos(gameState.camera.yaw) - moveDir.z * Math.sin(gameState.camera.yaw);
-            const rotatedZ = moveDir.x * Math.sin(gameState.camera.yaw) + moveDir.z * Math.cos(gameState.camera.yaw);
+        forward = Math.max(-1, Math.min(1, forward));
+        strafe = Math.max(-1, Math.min(1, strafe));
 
-            gameState.player.velocity.x = rotatedX * moveSpeed;
-            gameState.player.velocity.z = rotatedZ * moveSpeed;
-
-            // Break stealth on movement
-            if (gameState.player.isStealthed && (Math.abs(moveX) > 0 || Math.abs(moveZ) > 0)) {
-                // Allow some movement in stealth but slower
-                gameState.player.velocity.multiplyScalar(0.5);
+        if (!rightMouseDown) {
+            if (keys['a']) {
+                player.rotation -= turnSpeed * deltaTime;
             }
+            if (keys['d']) {
+                player.rotation += turnSpeed * deltaTime;
+            }
+        }
+
+        if (rightMouseDown) {
+            player.rotation = normalizeAngle(gameState.camera.yaw);
         } else {
-            gameState.player.velocity.x *= 0.8;
-            gameState.player.velocity.z *= 0.8;
+            player.rotation = normalizeAngle(player.rotation);
+            const yawDiff = normalizeAngle(player.rotation - gameState.camera.yaw);
+            const followStrength = Math.min(1, deltaTime * 6);
+            gameState.camera.yaw = normalizeAngle(gameState.camera.yaw + yawDiff * followStrength);
+        }
+
+        if (forward === 0 && strafe === 0) {
+            player.velocity.x = 0;
+            player.velocity.z = 0;
+        } else {
+            const forwardDir = new THREE.Vector3(Math.sin(player.rotation), 0, Math.cos(player.rotation));
+            const rightDir = new THREE.Vector3(Math.cos(player.rotation), 0, -Math.sin(player.rotation));
+            const newVelocity = new THREE.Vector3();
+
+            if (forward !== 0) {
+                const speed = forward > 0 ? moveSpeed : backwardSpeed;
+                newVelocity.addScaledVector(forwardDir, speed * Math.sign(forward));
+            }
+
+            if (strafe !== 0) {
+                newVelocity.addScaledVector(rightDir, strafeSpeed * strafe);
+            }
+
+            if (player.isStealthed && (forward !== 0 || strafe !== 0)) {
+                newVelocity.multiplyScalar(0.5);
+            }
+
+            player.velocity.x = newVelocity.x;
+            player.velocity.z = newVelocity.z;
         }
     }
 
@@ -3585,6 +3663,7 @@ function updatePlayer(deltaTime) {
 
     // Update mesh
     playerMesh.position.copy(gameState.player.position);
+    playerMesh.rotation.y = gameState.player.rotation;
 
     // Energy regeneration
     gameState.player.energy = Math.min(gameState.player.maxEnergy, gameState.player.energy + 20 * deltaTime);
