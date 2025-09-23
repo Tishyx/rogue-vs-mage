@@ -305,7 +305,10 @@ const gameState = {
     isPaused: false,
     outcome: null,
     overlayMessage: null,
-    particles: []
+    particles: [],
+    environment: {
+        pillars: []
+    }
 };
 
 const initialPlayerState = {
@@ -349,6 +352,10 @@ const initialCameraState = {
     heightRatio: gameState.camera.heightRatio,
     defaultDistance: gameState.camera.defaultDistance
 };
+
+const PLAYER_COLLIDER_RADIUS = 0.8;
+const ENEMY_COLLIDER_RADIUS = 0.8;
+const PILLAR_COLLIDER_RADIUS = 1.6;
 
 function getCurrentEnemy() {
     return gameState.enemies[gameState.currentTarget] || null;
@@ -1318,6 +1325,11 @@ function createArenaPillars(radius = 32, pillarCount = 8) {
         metalness: 0.2
     });
 
+    const pillars = gameState.environment?.pillars;
+    if (pillars) {
+        pillars.length = 0;
+    }
+
     for (let i = 0; i < pillarCount; i++) {
         const angle = (i / pillarCount) * Math.PI * 2;
         const x = Math.cos(angle) * radius;
@@ -1325,10 +1337,139 @@ function createArenaPillars(radius = 32, pillarCount = 8) {
         const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
         pillar.castShadow = true;
         pillar.receiveShadow = true;
-        pillar.position.set(x, sampleTerrainHeight(x, z) + 6, z);
+        const baseY = sampleTerrainHeight(x, z);
+        const centerY = baseY + 6;
+        pillar.position.set(x, centerY, z);
         pillar.lookAt(0, pillar.position.y, 0);
         scene.add(pillar);
+
+        if (pillars) {
+            pillars.push({
+                center: new THREE.Vector3(x, centerY, z),
+                radius: PILLAR_COLLIDER_RADIUS,
+                halfHeight: 6,
+                minY: baseY,
+                maxY: baseY + 12
+            });
+        }
     }
+}
+
+function getPillarColliders() {
+    return gameState.environment?.pillars || [];
+}
+
+function resolveHorizontalMovement(startPosition, attemptedPosition, radius) {
+    const colliders = getPillarColliders();
+    if (!colliders.length) {
+        return attemptedPosition;
+    }
+
+    const resolved = attemptedPosition.clone();
+    let adjusted = true;
+    let iterations = 0;
+    const maxIterations = Math.max(1, colliders.length * 2);
+
+    while (adjusted && iterations < maxIterations) {
+        adjusted = false;
+        iterations++;
+
+        for (const collider of colliders) {
+            const dx = resolved.x - collider.center.x;
+            const dz = resolved.z - collider.center.z;
+            const minDistance = radius + collider.radius;
+            const distSq = dx * dx + dz * dz;
+
+            if (distSq < minDistance * minDistance) {
+                const dist = Math.sqrt(distSq);
+                let nx;
+                let nz;
+
+                if (dist === 0) {
+                    const fallback = new THREE.Vector2(
+                        startPosition.x - collider.center.x,
+                        startPosition.z - collider.center.z
+                    );
+                    if (fallback.lengthSq() === 0) {
+                        fallback.set(1, 0);
+                    }
+                    fallback.normalize();
+                    nx = fallback.x;
+                    nz = fallback.y;
+                } else {
+                    nx = dx / dist;
+                    nz = dz / dist;
+                }
+
+                const push = minDistance - dist;
+                resolved.x += nx * push;
+                resolved.z += nz * push;
+                adjusted = true;
+            }
+        }
+    }
+
+    return resolved;
+}
+
+function segmentCircleHitParam(start, end, center, radius) {
+    const direction = end.clone().sub(start);
+    const f = start.clone().sub(center);
+    const a = direction.dot(direction);
+    if (a < 1e-8) {
+        return null;
+    }
+
+    const b = 2 * f.dot(direction);
+    const c = f.dot(f) - radius * radius;
+    const discriminant = b * b - 4 * a * c;
+
+    if (discriminant < 0) {
+        return null;
+    }
+
+    const sqrtDisc = Math.sqrt(discriminant);
+    const invDenom = 1 / (2 * a);
+    const t1 = (-b - sqrtDisc) * invDenom;
+    const t2 = (-b + sqrtDisc) * invDenom;
+    let hit = null;
+
+    if (t1 >= 0 && t1 <= 1) {
+        hit = t1;
+    }
+
+    if (t2 >= 0 && t2 <= 1) {
+        hit = hit === null ? t2 : Math.min(hit, t2);
+    }
+
+    return hit;
+}
+
+function isLineOfSightBlocked(start, end) {
+    const colliders = getPillarColliders();
+    if (!colliders.length) {
+        return false;
+    }
+
+    const segmentStart = new THREE.Vector2(start.x, start.z);
+    const segmentEnd = new THREE.Vector2(end.x, end.z);
+
+    for (const collider of colliders) {
+        const minY = Math.min(start.y, end.y);
+        const maxY = Math.max(start.y, end.y);
+
+        if (maxY < collider.minY || minY > collider.maxY) {
+            continue;
+        }
+
+        const center2D = new THREE.Vector2(collider.center.x, collider.center.z);
+        const hit = segmentCircleHitParam(segmentStart, segmentEnd, center2D, collider.radius);
+        if (hit !== null) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 const treeTrunkGeometry = new THREE.CylinderGeometry(0.25, 0.35, 2.6, 8);
@@ -2481,19 +2622,63 @@ class ArcaneMissileProjectile {
         this.mesh.lookAt(this.target);
         this.mesh.scale.set(this.startSize, this.startSize, this.startSize);
         scene.add(this.mesh);
+
+        this.lastPosition = this.origin.clone();
     }
 
     update(deltaTime) {
         this.elapsed += deltaTime;
         const progress = THREE.MathUtils.clamp(this.elapsed / this.duration, 0, 1);
 
-        const currentPosition = new THREE.Vector3().lerpVectors(this.origin, this.target, progress);
+        const previousPosition = this.lastPosition.clone();
+        let currentPosition = new THREE.Vector3().lerpVectors(this.origin, this.target, progress);
+
+        let blocked = false;
+        const colliders = getPillarColliders();
+        if (colliders.length) {
+            const start2D = new THREE.Vector2(previousPosition.x, previousPosition.z);
+            const end2D = new THREE.Vector2(currentPosition.x, currentPosition.z);
+            let nearestHit = null;
+
+            for (const collider of colliders) {
+                const minY = Math.min(previousPosition.y, currentPosition.y);
+                const maxY = Math.max(previousPosition.y, currentPosition.y);
+                if (maxY < collider.minY || minY > collider.maxY) {
+                    continue;
+                }
+
+                const center2D = new THREE.Vector2(collider.center.x, collider.center.z);
+                const hit = segmentCircleHitParam(start2D, end2D, center2D, collider.radius);
+                if (hit !== null) {
+                    if (nearestHit === null || hit < nearestHit) {
+                        nearestHit = hit;
+                    }
+                }
+            }
+
+            if (nearestHit !== null) {
+                currentPosition = new THREE.Vector3().lerpVectors(previousPosition, currentPosition, nearestHit);
+                blocked = true;
+            }
+        }
+
         this.mesh.position.copy(currentPosition);
         this.mesh.lookAt(currentPosition.clone().add(this.direction));
 
         const size = THREE.MathUtils.lerp(this.startSize, this.endSize, progress);
         this.mesh.scale.set(size, size, size);
         this.material.uniforms.opacity.value = 1 - progress;
+
+        this.lastPosition.copy(currentPosition);
+
+        if (blocked) {
+            const impactColor = this.color.getHex();
+            scene.remove(this.mesh);
+            this.geometry.dispose();
+            this.material.dispose();
+            createArcaneImpactEffect(currentPosition, { color: impactColor });
+            return false;
+        }
 
         if (Math.random() < 0.7) {
             const drift = new THREE.Vector3(
@@ -3287,12 +3472,20 @@ function updateEnemyAI(deltaTime) {
         }
 
         playerVisible = closeEnough || (withinView && enemy.awareness > 0.6);
-        if (playerVisible) {
-            enemy.lastKnownPlayerPos = gameState.player.position.clone();
-        }
     } else {
         enemy.awareness = 1;
         playerVisible = true;
+    }
+
+    if (playerVisible) {
+        const enemyEye = enemy.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+        const playerEye = gameState.player.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+        if (isLineOfSightBlocked(enemyEye, playerEye)) {
+            playerVisible = false;
+        }
+    }
+
+    if (playerVisible) {
         enemy.lastKnownPlayerPos = gameState.player.position.clone();
         enemy.searchTimer = 0;
         enemy.patrolAngle = 0;
@@ -3642,10 +3835,26 @@ function updatePlayer(deltaTime) {
     }
 
     // Apply gravity
-    gameState.player.velocity.y -= 20 * deltaTime;
+    player.velocity.y -= 20 * deltaTime;
 
-    // Update position
-    gameState.player.position.add(gameState.player.velocity.clone().multiplyScalar(deltaTime));
+    const startPosition = player.position.clone();
+    const attemptedPosition = player.position.clone();
+    attemptedPosition.x += player.velocity.x * deltaTime;
+    attemptedPosition.z += player.velocity.z * deltaTime;
+    const resolvedPosition = resolveHorizontalMovement(startPosition, attemptedPosition, PLAYER_COLLIDER_RADIUS);
+
+    player.position.x = resolvedPosition.x;
+    player.position.z = resolvedPosition.z;
+
+    if (deltaTime > 0) {
+        player.velocity.x = (player.position.x - startPosition.x) / deltaTime;
+        player.velocity.z = (player.position.z - startPosition.z) / deltaTime;
+    } else {
+        player.velocity.x = 0;
+        player.velocity.z = 0;
+    }
+
+    player.position.y += player.velocity.y * deltaTime;
 
     // Ground collision
     if (gameState.player.position.y < 1) {
@@ -3693,7 +3902,22 @@ function updateEnemy(deltaTime) {
     }
 
     // Update position
-    enemy.position.add(enemy.velocity.clone().multiplyScalar(deltaTime));
+    const enemyStart = enemy.position.clone();
+    const enemyAttempt = enemy.position.clone();
+    enemyAttempt.x += enemy.velocity.x * deltaTime;
+    enemyAttempt.z += enemy.velocity.z * deltaTime;
+    const enemyResolved = resolveHorizontalMovement(enemyStart, enemyAttempt, ENEMY_COLLIDER_RADIUS);
+
+    enemy.position.x = enemyResolved.x;
+    enemy.position.z = enemyResolved.z;
+
+    if (deltaTime > 0) {
+        enemy.velocity.x = (enemy.position.x - enemyStart.x) / deltaTime;
+        enemy.velocity.z = (enemy.position.z - enemyStart.z) / deltaTime;
+    } else {
+        enemy.velocity.x = 0;
+        enemy.velocity.z = 0;
+    }
 
     // Arena bounds
     const distFromCenter = Math.sqrt(enemy.position.x ** 2 + enemy.position.z ** 2);
