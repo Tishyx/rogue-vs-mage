@@ -698,6 +698,10 @@ const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const textureLoader = new THREE.TextureLoader();
+const gltfLoader = new THREE.GLTFLoader();
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0x404040);
@@ -737,18 +741,111 @@ for (let i = 0; i < 8; i++) {
 }
 
 // Create player (Rogue)
-const playerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
-const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-const playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
+const playerMesh = new THREE.Group();
 playerMesh.castShadow = true;
 scene.add(playerMesh);
+playerMesh.position.copy(gameState.player.position);
+
+const playerDiffuseMap = textureLoader.load(
+    'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/uv_grid_opengl.jpg',
+    texture => {
+        texture.encoding = THREE.sRGBEncoding;
+    }
+);
+const playerNormalMap = textureLoader.load(
+    'https://threejsfundamentals.org/threejs/resources/images/wall/wall-normal.jpg'
+);
+playerNormalMap.wrapS = THREE.RepeatWrapping;
+playerNormalMap.wrapT = THREE.RepeatWrapping;
+const playerRoughnessMap = textureLoader.load(
+    'https://threejsfundamentals.org/threejs/resources/images/wall/wall-roughness.jpg'
+);
+playerRoughnessMap.wrapS = THREE.RepeatWrapping;
+playerRoughnessMap.wrapT = THREE.RepeatWrapping;
+
+const playerMaterial = new THREE.MeshStandardMaterial({
+    map: playerDiffuseMap,
+    normalMap: playerNormalMap,
+    roughnessMap: playerRoughnessMap,
+    metalness: 0.2,
+    roughness: 1.0
+});
+
+gltfLoader.load(
+    'https://threejs.org/examples/models/gltf/Xbot.glb',
+    gltf => {
+        const model = gltf.scene;
+        model.traverse(child => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                child.material = playerMaterial;
+            }
+        });
+        model.scale.set(0.018, 0.018, 0.018);
+        model.position.set(0, -1.0, 0);
+        playerMesh.add(model);
+    },
+    undefined,
+    error => {
+        console.error('Failed to load player model', error);
+    }
+);
 
 // Create enemy (Frost Mage)
-const enemyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
-const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0x4169e1 });
-const enemyMesh = new THREE.Mesh(enemyGeometry, enemyMaterial);
+const enemyMesh = new THREE.Group();
 enemyMesh.castShadow = true;
 scene.add(enemyMesh);
+const firstEnemy = getCurrentEnemy();
+if (firstEnemy) {
+    enemyMesh.position.copy(firstEnemy.position);
+}
+
+const enemyDiffuseMap = textureLoader.load(
+    'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/DamagedHelmet/glTF/Default_albedo.jpg',
+    texture => {
+        texture.encoding = THREE.sRGBEncoding;
+    }
+);
+const enemyNormalMap = textureLoader.load(
+    'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/DamagedHelmet/glTF/Default_normal.jpg'
+);
+enemyNormalMap.flipY = false;
+const enemyRoughnessMap = textureLoader.load(
+    'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/DamagedHelmet/glTF/Default_metalRoughness.jpg'
+);
+enemyRoughnessMap.flipY = false;
+
+const enemyMaterial = new THREE.MeshStandardMaterial({
+    map: enemyDiffuseMap,
+    normalMap: enemyNormalMap,
+    roughnessMap: enemyRoughnessMap,
+    metalnessMap: enemyRoughnessMap,
+    metalness: 0.1,
+    roughness: 0.9
+});
+
+gltfLoader.load(
+    'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+    gltf => {
+        const model = gltf.scene;
+        model.traverse(child => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                child.material = enemyMaterial;
+            }
+        });
+        model.scale.set(0.8, 0.8, 0.8);
+        model.position.set(0, -1.25, 0);
+        model.rotation.y = Math.PI;
+        enemyMesh.add(model);
+    },
+    undefined,
+    error => {
+        console.error('Failed to load enemy model', error);
+    }
+);
 
 // Particle system for effects
 const effectClock = new THREE.Clock();
