@@ -15,6 +15,8 @@ const gameState = {
         rootDuration: 0,
         buffs: new Map(),
         inCombat: false,
+        appearanceSet: 'stealth-leather',
+        availableAppearances: ['stealth-leather', 'crimson-assassin'],
         abilities: [
             {
                 name: 'Sinister Strike',
@@ -180,6 +182,8 @@ const gameState = {
             currentCast: null,
             isRooted: false,
             rootDuration: 0,
+            appearanceSet: 'frost-regalia',
+            availableAppearances: ['frost-regalia', 'arcane-warden'],
             abilities: [
                 {
                     name: 'Frostbolt',
@@ -311,7 +315,8 @@ const initialPlayerState = {
     isStealthed: false,
     isRooted: false,
     rootDuration: 0,
-    inCombat: false
+    inCombat: false,
+    appearanceSet: gameState.player.appearanceSet
 };
 
 const initialEnemyStates = gameState.enemies.map(enemy => ({
@@ -323,7 +328,8 @@ const initialEnemyStates = gameState.enemies.map(enemy => ({
     awareness: enemy.awareness,
     detectCooldown: enemy.detectCooldown,
     searchTimer: enemy.searchTimer,
-    patrolAngle: enemy.patrolAngle
+    patrolAngle: enemy.patrolAngle,
+    appearanceSet: enemy.appearanceSet
 }));
 
 const initialCameraState = {
@@ -376,6 +382,9 @@ function selectNextTarget() {
                 interruptEnemyCast('Target Changed', previousEnemy);
             }
             gameState.currentTarget = nextIndex;
+            applyEnemyAppearance(potentialTarget);
+            updateEnemySkinOptions(potentialTarget);
+            updateSkinSelectors();
             updateTargetIndicator();
             return;
         }
@@ -404,8 +413,7 @@ function removePlayerBuff(name) {
     gameState.player.buffs.delete(name);
     if (name === 'stealth') {
         gameState.player.isStealthed = false;
-        playerMaterial.opacity = 1;
-        playerMaterial.transparent = false;
+        setPlayerAppearanceOpacity(1, false);
     }
 }
 
@@ -689,6 +697,43 @@ function initializeAbilityUI() {
     bindAbilityClickHandlers();
 }
 
+function initializeAppearanceSelectors() {
+    const playerSelect = document.getElementById('playerSkinSelect');
+    if (playerSelect) {
+        updatePlayerSkinOptions();
+        playerSelect.addEventListener('change', event => {
+            const value = event.target.value;
+            if (!value) {
+                return;
+            }
+            const success = gameState.setAppearance('player', value);
+            if (!success) {
+                playerSelect.value = gameState.player.appearanceSet;
+            }
+        });
+    }
+
+    const enemySelect = document.getElementById('enemySkinSelect');
+    if (enemySelect) {
+        updateEnemySkinOptions();
+        enemySelect.addEventListener('change', event => {
+            const value = event.target.value;
+            if (!value) {
+                return;
+            }
+            const currentEnemy = getCurrentEnemy();
+            const target = currentEnemy || 0;
+            const success = gameState.setAppearance(target, value);
+            if (!success) {
+                const fallback = currentEnemy?.appearanceSet || gameState.enemies[0]?.appearanceSet || value;
+                enemySelect.value = fallback;
+            }
+        });
+    }
+
+    updateSkinSelectors();
+}
+
 // Initialize Three.js
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x000033, 10, 100);
@@ -702,6 +747,323 @@ renderer.outputEncoding = THREE.sRGBEncoding;
 
 const textureLoader = new THREE.TextureLoader();
 const gltfLoader = new THREE.GLTFLoader();
+
+const clothingTextureCache = new Map();
+
+function loadTextureWithOptions(url, options = {}) {
+    if (!url) {
+        return null;
+    }
+
+    if (clothingTextureCache.has(url)) {
+        return clothingTextureCache.get(url);
+    }
+
+    const texture = textureLoader.load(url, loadedTexture => {
+        if (options.encoding === 'sRGB' || options.encoding === THREE.sRGBEncoding) {
+            loadedTexture.encoding = THREE.sRGBEncoding;
+        }
+        if (options.repeat) {
+            loadedTexture.repeat.set(options.repeat[0] ?? 1, options.repeat[1] ?? 1);
+        }
+        if (options.wrapS) {
+            loadedTexture.wrapS = options.wrapS;
+        }
+        if (options.wrapT) {
+            loadedTexture.wrapT = options.wrapT;
+        }
+        if (options.flipY === false) {
+            loadedTexture.flipY = false;
+        }
+    });
+
+    if (options.encoding === 'sRGB' || options.encoding === THREE.sRGBEncoding) {
+        texture.encoding = THREE.sRGBEncoding;
+    }
+    if (options.repeat) {
+        texture.wrapS = texture.wrapS ?? THREE.RepeatWrapping;
+        texture.wrapT = texture.wrapT ?? THREE.RepeatWrapping;
+        texture.repeat.set(options.repeat[0] ?? 1, options.repeat[1] ?? 1);
+    }
+    if (options.wrapS) {
+        texture.wrapS = options.wrapS;
+    }
+    if (options.wrapT) {
+        texture.wrapT = options.wrapT;
+    }
+    if (options.flipY === false) {
+        texture.flipY = false;
+    }
+
+    clothingTextureCache.set(url, texture);
+    return texture;
+}
+
+const characterAppearances = {
+    player: {
+        'stealth-leather': {
+            body: {
+                map: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/uv_grid_opengl.jpg',
+                normalMap: 'https://threejsfundamentals.org/threejs/resources/images/wall/wall-normal.jpg',
+                roughnessMap: 'https://threejsfundamentals.org/threejs/resources/images/wall/wall-roughness.jpg',
+                color: 0xffffff,
+                metalness: 0.2,
+                roughness: 1.0,
+                repeat: [1, 1]
+            },
+            attachments: {
+                hood: {
+                    texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/uv_grid_opengl.jpg',
+                    color: 0x202028,
+                    repeat: [2, 2],
+                    offset: { x: 0, y: 0.08, z: 0.02 },
+                    rotation: { x: -Math.PI / 16, y: 0, z: 0 },
+                    scale: { x: 1.05, y: 0.9, z: 1.05 }
+                },
+                shoulders: {
+                    texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/uv_grid_opengl.jpg',
+                    color: 0x394064,
+                    repeat: [1.5, 1],
+                    size: { x: 0.28, y: 0.16, z: 0.4 },
+                    offset: { x: 0.22, y: -0.05, z: -0.02 }
+                },
+                belt: {
+                    texture: 'https://threejs.org/examples/textures/brick_diffuse.jpg',
+                    color: 0x5b442d,
+                    repeat: [2, 1],
+                    radius: 0.55,
+                    thickness: 0.08,
+                    offsetY: -0.2
+                }
+            }
+        },
+        'crimson-assassin': {
+            body: {
+                map: 'https://threejs.org/examples/textures/brick_diffuse.jpg',
+                normalMap: 'https://threejs.org/examples/textures/brick_normal.jpg',
+                roughnessMap: 'https://threejs.org/examples/textures/brick_roughness.jpg',
+                color: 0xffd9d9,
+                metalness: 0.15,
+                roughness: 0.85,
+                repeat: [1.6, 1.6]
+            },
+            attachments: {
+                hood: {
+                    texture: 'https://threejs.org/examples/textures/brick_diffuse.jpg',
+                    color: 0x4f0d18,
+                    repeat: [3, 3],
+                    offset: { x: 0, y: 0.09, z: 0.03 },
+                    rotation: { x: -Math.PI / 18, y: 0, z: 0 },
+                    scale: { x: 1.1, y: 0.95, z: 1.1 }
+                },
+                shoulders: {
+                    texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/uv_grid_opengl.jpg',
+                    color: 0x811f35,
+                    repeat: [2, 1],
+                    size: { x: 0.3, y: 0.18, z: 0.42 },
+                    offset: { x: 0.24, y: -0.04, z: 0.0 }
+                },
+                belt: {
+                    texture: 'https://threejs.org/examples/textures/brick_diffuse.jpg',
+                    color: 0x3c1a1f,
+                    repeat: [3, 1],
+                    radius: 0.58,
+                    thickness: 0.09,
+                    offsetY: -0.18
+                }
+            }
+        }
+    },
+    enemy: {
+        'frost-regalia': {
+            body: {
+                map: 'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/DamagedHelmet/glTF/Default_albedo.jpg',
+                normalMap: 'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/DamagedHelmet/glTF/Default_normal.jpg',
+                roughnessMap: 'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/DamagedHelmet/glTF/Default_metalRoughness.jpg',
+                color: 0xffffff,
+                metalness: 0.1,
+                roughness: 0.9,
+                repeat: [1, 1],
+                flipY: false
+            },
+            attachments: {
+                hood: {
+                    texture: 'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+                    color: 0x9bd4ff,
+                    repeat: [2, 1],
+                    offset: { x: 0, y: 0.1, z: 0.05 },
+                    rotation: { x: -Math.PI / 20, y: 0, z: 0 },
+                    scale: { x: 1.1, y: 0.92, z: 1.15 }
+                },
+                shoulders: {
+                    texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/uv_grid_opengl.jpg',
+                    color: 0x6cbaff,
+                    repeat: [2, 1.2],
+                    size: { x: 0.35, y: 0.22, z: 0.5 },
+                    offset: { x: 0.28, y: -0.02, z: 0.05 }
+                },
+                belt: {
+                    texture: 'https://threejs.org/examples/textures/planets/earth_specular_2048.jpg',
+                    color: 0x4a91ff,
+                    repeat: [2.5, 1],
+                    radius: 0.65,
+                    thickness: 0.1,
+                    offsetY: -0.22
+                }
+            }
+        },
+        'arcane-warden': {
+            body: {
+                map: 'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+                normalMap: 'https://threejs.org/examples/textures/water/Water_1_M_Normal.jpg',
+                roughnessMap: 'https://threejs.org/examples/textures/planets/earth_specular_2048.jpg',
+                color: 0xe2d9ff,
+                metalness: 0.25,
+                roughness: 0.7,
+                repeat: [1.2, 1.2]
+            },
+            attachments: {
+                hood: {
+                    texture: 'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+                    color: 0x403a80,
+                    repeat: [2, 2],
+                    offset: { x: 0, y: 0.11, z: 0.02 },
+                    rotation: { x: -Math.PI / 24, y: 0, z: 0 },
+                    scale: { x: 1.1, y: 0.96, z: 1.12 }
+                },
+                shoulders: {
+                    texture: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/uv_grid_opengl.jpg',
+                    color: 0x6a5bdc,
+                    repeat: [1.8, 1.1],
+                    size: { x: 0.33, y: 0.2, z: 0.48 },
+                    offset: { x: 0.26, y: -0.03, z: 0.04 }
+                },
+                belt: {
+                    texture: 'https://threejs.org/examples/textures/planets/earth_specular_2048.jpg',
+                    color: 0x2c2457,
+                    repeat: [3, 1],
+                    radius: 0.64,
+                    thickness: 0.09,
+                    offsetY: -0.24
+                }
+            }
+        }
+    }
+};
+
+function getCharacterAppearance(characterType, appearanceSet) {
+    const options = characterAppearances[characterType] || {};
+    if (appearanceSet && options[appearanceSet]) {
+        return options[appearanceSet];
+    }
+    const firstKey = Object.keys(options)[0];
+    return firstKey ? options[firstKey] : null;
+}
+
+function findBoneByNames(model, names) {
+    if (!model || !names) return null;
+    for (const name of names) {
+        const bone = model.getObjectByName(name);
+        if (bone) {
+            return bone;
+        }
+    }
+    return null;
+}
+
+function clearAttachmentGroup(group) {
+    if (!group) return;
+    const attachments = group.userData.attachments || [];
+    attachments.forEach(attachment => {
+        if (attachment.parent) {
+            attachment.parent.remove(attachment);
+        }
+        if (Array.isArray(attachment.material)) {
+            attachment.material.forEach(mat => mat.dispose?.());
+        } else {
+            attachment.material?.dispose?.();
+        }
+        attachment.geometry?.dispose?.();
+    });
+    group.userData.attachments = [];
+}
+
+function trackAppearanceMaterial(store, material) {
+    if (!material) return;
+    if (!store.includes(material)) {
+        store.push(material);
+    }
+}
+
+function setMaterialOpacity(material, opacity, transparent) {
+    if (!material) return;
+    if (Array.isArray(material)) {
+        material.forEach(mat => {
+            mat.opacity = opacity;
+            mat.transparent = transparent;
+            mat.needsUpdate = true;
+        });
+        return;
+    }
+    material.opacity = opacity;
+    material.transparent = transparent;
+    material.needsUpdate = true;
+}
+
+function setPlayerAppearanceOpacity(opacity, transparent) {
+    const materials = playerMesh?.userData?.appearanceMaterials || [];
+    materials.forEach(material => setMaterialOpacity(material, opacity, transparent));
+}
+
+function updateSkinSelectors() {
+    const playerSelect = document.getElementById('playerSkinSelect');
+    if (playerSelect) {
+        playerSelect.value = gameState.player.appearanceSet;
+    }
+
+    const enemySelect = document.getElementById('enemySkinSelect');
+    if (enemySelect) {
+        const currentEnemy = getCurrentEnemy();
+        if (currentEnemy) {
+            enemySelect.value = currentEnemy.appearanceSet;
+        }
+    }
+}
+
+function formatAppearanceLabel(appearance) {
+    return appearance
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function updatePlayerSkinOptions() {
+    const playerSelect = document.getElementById('playerSkinSelect');
+    if (!playerSelect) {
+        return;
+    }
+    const playerOptions = gameState.player.availableAppearances && gameState.player.availableAppearances.length
+        ? gameState.player.availableAppearances
+        : [gameState.player.appearanceSet];
+    playerSelect.innerHTML = playerOptions.map(appearance =>
+        `<option value="${appearance}">${formatAppearanceLabel(appearance)}</option>`
+    ).join('');
+    playerSelect.value = gameState.player.appearanceSet;
+}
+
+function updateEnemySkinOptions(enemy = getCurrentEnemy()) {
+    const enemySelect = document.getElementById('enemySkinSelect');
+    if (!enemySelect) {
+        return;
+    }
+    const baseAvailable = enemy?.availableAppearances || (gameState.enemies[0]?.availableAppearances ?? []);
+    const available = baseAvailable.length ? baseAvailable : (enemy ? [enemy.appearanceSet] : []);
+    enemySelect.innerHTML = available.map(appearance =>
+        `<option value="${appearance}">${formatAppearanceLabel(appearance)}</option>`
+    ).join('');
+    if (enemy) {
+        enemySelect.value = enemy.appearanceSet;
+    }
+}
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0x404040);
@@ -743,48 +1105,221 @@ for (let i = 0; i < 8; i++) {
 // Create player (Rogue)
 const playerMesh = new THREE.Group();
 playerMesh.castShadow = true;
+playerMesh.userData.appearanceMaterials = [];
 scene.add(playerMesh);
 playerMesh.position.copy(gameState.player.position);
 
-const playerDiffuseMap = textureLoader.load(
-    'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/uv_grid_opengl.jpg',
-    texture => {
-        texture.encoding = THREE.sRGBEncoding;
-    }
-);
-const playerNormalMap = textureLoader.load(
-    'https://threejsfundamentals.org/threejs/resources/images/wall/wall-normal.jpg'
-);
-playerNormalMap.wrapS = THREE.RepeatWrapping;
-playerNormalMap.wrapT = THREE.RepeatWrapping;
-const playerRoughnessMap = textureLoader.load(
-    'https://threejsfundamentals.org/threejs/resources/images/wall/wall-roughness.jpg'
-);
-playerRoughnessMap.wrapS = THREE.RepeatWrapping;
-playerRoughnessMap.wrapT = THREE.RepeatWrapping;
+const playerArmorGroup = new THREE.Group();
+playerArmorGroup.name = 'playerArmorGroup';
+playerArmorGroup.userData.attachments = [];
+playerMesh.add(playerArmorGroup);
 
-const playerMaterial = new THREE.MeshStandardMaterial({
-    map: playerDiffuseMap,
-    normalMap: playerNormalMap,
-    roughnessMap: playerRoughnessMap,
-    metalness: 0.2,
-    roughness: 1.0
-});
+let playerBodyMaterial = null;
+
+function applyPlayerAppearance() {
+    const baseModel = playerMesh.userData.baseModel;
+    const appearance = getCharacterAppearance('player', gameState.player.appearanceSet);
+    if (!baseModel || !appearance) {
+        return;
+    }
+
+    const previousMaterial = playerBodyMaterial;
+    const materialConfig = {
+        color: new THREE.Color(appearance.body.color ?? 0xffffff),
+        metalness: appearance.body.metalness ?? 0.2,
+        roughness: appearance.body.roughness ?? 0.9
+    };
+
+    const bodyMap = loadTextureWithOptions(appearance.body.map, {
+        encoding: 'sRGB',
+        repeat: appearance.body.repeat,
+        wrapS: THREE.RepeatWrapping,
+        wrapT: THREE.RepeatWrapping
+    });
+    if (bodyMap) {
+        materialConfig.map = bodyMap;
+    }
+
+    const normalMap = loadTextureWithOptions(appearance.body.normalMap, {
+        repeat: appearance.body.repeat,
+        wrapS: THREE.RepeatWrapping,
+        wrapT: THREE.RepeatWrapping
+    });
+    if (normalMap) {
+        materialConfig.normalMap = normalMap;
+    }
+
+    const roughnessMap = loadTextureWithOptions(appearance.body.roughnessMap, {
+        repeat: appearance.body.repeat,
+        wrapS: THREE.RepeatWrapping,
+        wrapT: THREE.RepeatWrapping,
+        flipY: appearance.body.flipY
+    });
+    if (roughnessMap) {
+        materialConfig.roughnessMap = roughnessMap;
+    }
+
+    playerBodyMaterial = new THREE.MeshStandardMaterial(materialConfig);
+    baseModel.traverse(child => {
+        if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            child.material = playerBodyMaterial;
+        }
+    });
+
+    if (previousMaterial) {
+        previousMaterial.dispose();
+    }
+
+    playerMesh.userData.appearanceMaterials = [playerBodyMaterial];
+
+    clearAttachmentGroup(playerArmorGroup);
+
+    const headBone = findBoneByNames(baseModel, ['mixamorigHead', 'Head', 'HeadTop_End']);
+    const leftShoulderBone = findBoneByNames(baseModel, ['mixamorigLeftShoulder', 'LeftShoulder', 'Shoulder.L']);
+    const rightShoulderBone = findBoneByNames(baseModel, ['mixamorigRightShoulder', 'RightShoulder', 'Shoulder.R']);
+    const spineBone = findBoneByNames(baseModel, ['mixamorigSpine', 'mixamorigSpine1', 'Spine', 'Hips']);
+
+    if (appearance.attachments?.hood) {
+        const hoodTexture = loadTextureWithOptions(appearance.attachments.hood.texture, {
+            encoding: 'sRGB',
+            repeat: appearance.attachments.hood.repeat,
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        });
+        const hoodMaterial = new THREE.MeshStandardMaterial({
+            map: hoodTexture,
+            color: new THREE.Color(appearance.attachments.hood.color ?? 0xffffff),
+            metalness: appearance.attachments.hood.metalness ?? 0.05,
+            roughness: appearance.attachments.hood.roughness ?? 0.85
+        });
+        const hoodGeometry = new THREE.SphereGeometry(
+            appearance.attachments.hood.radius ?? 0.9,
+            24,
+            18,
+            0,
+            Math.PI * 2,
+            0,
+            Math.PI / 1.6
+        );
+        const hoodMesh = new THREE.Mesh(hoodGeometry, hoodMaterial);
+        hoodMesh.name = 'playerHood';
+        hoodMesh.castShadow = true;
+        hoodMesh.receiveShadow = true;
+        const hoodScale = appearance.attachments.hood.scale || {};
+        hoodMesh.scale.set(hoodScale.x ?? 1, hoodScale.y ?? 0.9, hoodScale.z ?? 1);
+        const hoodOffset = appearance.attachments.hood.offset || {};
+        hoodMesh.position.set(hoodOffset.x ?? 0, hoodOffset.y ?? 0.08, hoodOffset.z ?? 0.02);
+        const hoodRotation = appearance.attachments.hood.rotation || {};
+        hoodMesh.rotation.set(
+            hoodRotation.x ?? -Math.PI / 16,
+            hoodRotation.y ?? 0,
+            hoodRotation.z ?? 0
+        );
+        (headBone || baseModel).add(hoodMesh);
+        playerArmorGroup.userData.attachments.push(hoodMesh);
+        trackAppearanceMaterial(playerMesh.userData.appearanceMaterials, hoodMaterial);
+    }
+
+    if (appearance.attachments?.shoulders) {
+        const shoulderTexture = loadTextureWithOptions(appearance.attachments.shoulders.texture, {
+            encoding: 'sRGB',
+            repeat: appearance.attachments.shoulders.repeat,
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        });
+        const shoulderMaterial = new THREE.MeshStandardMaterial({
+            map: shoulderTexture,
+            color: new THREE.Color(appearance.attachments.shoulders.color ?? 0xffffff),
+            metalness: appearance.attachments.shoulders.metalness ?? 0.15,
+            roughness: appearance.attachments.shoulders.roughness ?? 0.75
+        });
+        const size = appearance.attachments.shoulders.size || {};
+        const shoulderGeometry = new THREE.BoxGeometry(
+            size.x ?? 0.28,
+            size.y ?? 0.16,
+            size.z ?? 0.4
+        );
+
+        const shoulderOffset = appearance.attachments.shoulders.offset || {};
+
+        const leftShoulder = new THREE.Mesh(shoulderGeometry.clone(), shoulderMaterial);
+        leftShoulder.name = 'playerShoulderLeft';
+        leftShoulder.castShadow = true;
+        leftShoulder.receiveShadow = true;
+        leftShoulder.position.set(
+            shoulderOffset.x ?? 0.22,
+            shoulderOffset.y ?? -0.05,
+            shoulderOffset.z ?? -0.02
+        );
+        const leftParent = leftShoulderBone || baseModel;
+        leftParent.add(leftShoulder);
+        playerArmorGroup.userData.attachments.push(leftShoulder);
+
+        const rightShoulder = new THREE.Mesh(shoulderGeometry.clone(), shoulderMaterial);
+        rightShoulder.name = 'playerShoulderRight';
+        rightShoulder.castShadow = true;
+        rightShoulder.receiveShadow = true;
+        rightShoulder.position.set(
+            -(shoulderOffset.x ?? 0.22),
+            shoulderOffset.y ?? -0.05,
+            shoulderOffset.z ?? -0.02
+        );
+        const rightParent = rightShoulderBone || baseModel;
+        rightParent.add(rightShoulder);
+        playerArmorGroup.userData.attachments.push(rightShoulder);
+
+        trackAppearanceMaterial(playerMesh.userData.appearanceMaterials, shoulderMaterial);
+    }
+
+    if (appearance.attachments?.belt) {
+        const beltTexture = loadTextureWithOptions(appearance.attachments.belt.texture, {
+            encoding: 'sRGB',
+            repeat: appearance.attachments.belt.repeat,
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        });
+        const beltMaterial = new THREE.MeshStandardMaterial({
+            map: beltTexture,
+            color: new THREE.Color(appearance.attachments.belt.color ?? 0xffffff),
+            metalness: appearance.attachments.belt.metalness ?? 0.2,
+            roughness: appearance.attachments.belt.roughness ?? 0.6
+        });
+        const beltGeometry = new THREE.TorusGeometry(
+            appearance.attachments.belt.radius ?? 0.55,
+            appearance.attachments.belt.thickness ?? 0.08,
+            16,
+            32
+        );
+        const beltMesh = new THREE.Mesh(beltGeometry, beltMaterial);
+        beltMesh.name = 'playerBelt';
+        beltMesh.rotation.x = Math.PI / 2;
+        beltMesh.castShadow = true;
+        beltMesh.receiveShadow = true;
+        beltMesh.position.y = appearance.attachments.belt.offsetY ?? -0.2;
+        const beltParent = spineBone || baseModel;
+        beltParent.add(beltMesh);
+        playerArmorGroup.userData.attachments.push(beltMesh);
+        trackAppearanceMaterial(playerMesh.userData.appearanceMaterials, beltMaterial);
+    }
+
+    if (gameState.player.isStealthed) {
+        setPlayerAppearanceOpacity(0.3, true);
+    }
+}
 
 gltfLoader.load(
     'https://threejs.org/examples/models/gltf/Xbot.glb',
     gltf => {
         const model = gltf.scene;
-        model.traverse(child => {
-            if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                child.material = playerMaterial;
-            }
-        });
         model.scale.set(0.018, 0.018, 0.018);
         model.position.set(0, -1.0, 0);
         playerMesh.add(model);
+        playerMesh.userData.baseModel = model;
+        applyPlayerAppearance();
+        updatePlayerSkinOptions();
+        updateSkinSelectors();
     },
     undefined,
     error => {
@@ -795,57 +1330,270 @@ gltfLoader.load(
 // Create enemy (Frost Mage)
 const enemyMesh = new THREE.Group();
 enemyMesh.castShadow = true;
+enemyMesh.userData.appearanceMaterials = [];
 scene.add(enemyMesh);
 const firstEnemy = getCurrentEnemy();
 if (firstEnemy) {
     enemyMesh.position.copy(firstEnemy.position);
 }
 
-const enemyDiffuseMap = textureLoader.load(
-    'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/DamagedHelmet/glTF/Default_albedo.jpg',
-    texture => {
-        texture.encoding = THREE.sRGBEncoding;
-    }
-);
-const enemyNormalMap = textureLoader.load(
-    'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/DamagedHelmet/glTF/Default_normal.jpg'
-);
-enemyNormalMap.flipY = false;
-const enemyRoughnessMap = textureLoader.load(
-    'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/DamagedHelmet/glTF/Default_metalRoughness.jpg'
-);
-enemyRoughnessMap.flipY = false;
+const enemyRobeGroup = new THREE.Group();
+enemyRobeGroup.name = 'enemyRobeGroup';
+enemyRobeGroup.userData.attachments = [];
+enemyMesh.add(enemyRobeGroup);
 
-const enemyMaterial = new THREE.MeshStandardMaterial({
-    map: enemyDiffuseMap,
-    normalMap: enemyNormalMap,
-    roughnessMap: enemyRoughnessMap,
-    metalnessMap: enemyRoughnessMap,
-    metalness: 0.1,
-    roughness: 0.9
-});
+let enemyBodyMaterial = null;
+
+function applyEnemyAppearance(targetEnemy = getCurrentEnemy()) {
+    const baseModel = enemyMesh.userData.baseModel;
+    if (!baseModel || !targetEnemy) {
+        return;
+    }
+    const appearance = getCharacterAppearance('enemy', targetEnemy.appearanceSet);
+    if (!appearance) {
+        return;
+    }
+
+    const previousMaterial = enemyBodyMaterial;
+    const materialConfig = {
+        color: new THREE.Color(appearance.body.color ?? 0xffffff),
+        metalness: appearance.body.metalness ?? 0.1,
+        roughness: appearance.body.roughness ?? 0.9
+    };
+
+    const bodyMap = loadTextureWithOptions(appearance.body.map, {
+        encoding: 'sRGB',
+        repeat: appearance.body.repeat,
+        wrapS: THREE.RepeatWrapping,
+        wrapT: THREE.RepeatWrapping,
+        flipY: appearance.body.flipY
+    });
+    if (bodyMap) {
+        materialConfig.map = bodyMap;
+    }
+
+    const normalMap = loadTextureWithOptions(appearance.body.normalMap, {
+        repeat: appearance.body.repeat,
+        wrapS: THREE.RepeatWrapping,
+        wrapT: THREE.RepeatWrapping,
+        flipY: appearance.body.flipY
+    });
+    if (normalMap) {
+        materialConfig.normalMap = normalMap;
+    }
+
+    const roughnessMap = loadTextureWithOptions(appearance.body.roughnessMap, {
+        repeat: appearance.body.repeat,
+        wrapS: THREE.RepeatWrapping,
+        wrapT: THREE.RepeatWrapping,
+        flipY: appearance.body.flipY
+    });
+    if (roughnessMap) {
+        materialConfig.roughnessMap = roughnessMap;
+    }
+
+    enemyBodyMaterial = new THREE.MeshStandardMaterial(materialConfig);
+    baseModel.traverse(child => {
+        if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            child.material = enemyBodyMaterial;
+        }
+    });
+
+    if (previousMaterial) {
+        previousMaterial.dispose();
+    }
+
+    enemyMesh.userData.appearanceMaterials = [enemyBodyMaterial];
+
+    clearAttachmentGroup(enemyRobeGroup);
+
+    const headBone = findBoneByNames(baseModel, ['mixamorigHead', 'Head', 'HeadTop_End']);
+    const leftShoulderBone = findBoneByNames(baseModel, ['mixamorigLeftShoulder', 'LeftShoulder', 'Shoulder.L']);
+    const rightShoulderBone = findBoneByNames(baseModel, ['mixamorigRightShoulder', 'RightShoulder', 'Shoulder.R']);
+    const spineBone = findBoneByNames(baseModel, ['mixamorigSpine', 'Spine', 'Hips']);
+
+    if (appearance.attachments?.hood) {
+        const hoodTexture = loadTextureWithOptions(appearance.attachments.hood.texture, {
+            encoding: 'sRGB',
+            repeat: appearance.attachments.hood.repeat,
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        });
+        const hoodMaterial = new THREE.MeshStandardMaterial({
+            map: hoodTexture,
+            color: new THREE.Color(appearance.attachments.hood.color ?? 0xffffff),
+            metalness: appearance.attachments.hood.metalness ?? 0.08,
+            roughness: appearance.attachments.hood.roughness ?? 0.78
+        });
+        const hoodGeometry = new THREE.SphereGeometry(
+            appearance.attachments.hood.radius ?? 1.1,
+            28,
+            20,
+            0,
+            Math.PI * 2,
+            0,
+            Math.PI / 1.6
+        );
+        const hoodMesh = new THREE.Mesh(hoodGeometry, hoodMaterial);
+        hoodMesh.name = 'enemyHood';
+        hoodMesh.castShadow = true;
+        hoodMesh.receiveShadow = true;
+        const hoodScale = appearance.attachments.hood.scale || {};
+        hoodMesh.scale.set(hoodScale.x ?? 1.05, hoodScale.y ?? 0.95, hoodScale.z ?? 1.1);
+        const hoodOffset = appearance.attachments.hood.offset || {};
+        hoodMesh.position.set(hoodOffset.x ?? 0, hoodOffset.y ?? 0.1, hoodOffset.z ?? 0.05);
+        const hoodRotation = appearance.attachments.hood.rotation || {};
+        hoodMesh.rotation.set(
+            hoodRotation.x ?? -Math.PI / 20,
+            hoodRotation.y ?? 0,
+            hoodRotation.z ?? 0
+        );
+        (headBone || baseModel).add(hoodMesh);
+        enemyRobeGroup.userData.attachments.push(hoodMesh);
+        trackAppearanceMaterial(enemyMesh.userData.appearanceMaterials, hoodMaterial);
+    }
+
+    if (appearance.attachments?.shoulders) {
+        const shoulderTexture = loadTextureWithOptions(appearance.attachments.shoulders.texture, {
+            encoding: 'sRGB',
+            repeat: appearance.attachments.shoulders.repeat,
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        });
+        const shoulderMaterial = new THREE.MeshStandardMaterial({
+            map: shoulderTexture,
+            color: new THREE.Color(appearance.attachments.shoulders.color ?? 0xffffff),
+            metalness: appearance.attachments.shoulders.metalness ?? 0.18,
+            roughness: appearance.attachments.shoulders.roughness ?? 0.7
+        });
+        const size = appearance.attachments.shoulders.size || {};
+        const shoulderGeometry = new THREE.BoxGeometry(
+            size.x ?? 0.35,
+            size.y ?? 0.22,
+            size.z ?? 0.5
+        );
+        const shoulderOffset = appearance.attachments.shoulders.offset || {};
+
+        const leftShoulder = new THREE.Mesh(shoulderGeometry.clone(), shoulderMaterial);
+        leftShoulder.name = 'enemyShoulderLeft';
+        leftShoulder.castShadow = true;
+        leftShoulder.receiveShadow = true;
+        leftShoulder.position.set(
+            shoulderOffset.x ?? 0.28,
+            shoulderOffset.y ?? -0.02,
+            shoulderOffset.z ?? 0.05
+        );
+        (leftShoulderBone || baseModel).add(leftShoulder);
+        enemyRobeGroup.userData.attachments.push(leftShoulder);
+
+        const rightShoulder = new THREE.Mesh(shoulderGeometry.clone(), shoulderMaterial);
+        rightShoulder.name = 'enemyShoulderRight';
+        rightShoulder.castShadow = true;
+        rightShoulder.receiveShadow = true;
+        rightShoulder.position.set(
+            -(shoulderOffset.x ?? 0.28),
+            shoulderOffset.y ?? -0.02,
+            shoulderOffset.z ?? 0.05
+        );
+        (rightShoulderBone || baseModel).add(rightShoulder);
+        enemyRobeGroup.userData.attachments.push(rightShoulder);
+
+        trackAppearanceMaterial(enemyMesh.userData.appearanceMaterials, shoulderMaterial);
+    }
+
+    if (appearance.attachments?.belt) {
+        const beltTexture = loadTextureWithOptions(appearance.attachments.belt.texture, {
+            encoding: 'sRGB',
+            repeat: appearance.attachments.belt.repeat,
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        });
+        const beltMaterial = new THREE.MeshStandardMaterial({
+            map: beltTexture,
+            color: new THREE.Color(appearance.attachments.belt.color ?? 0xffffff),
+            metalness: appearance.attachments.belt.metalness ?? 0.22,
+            roughness: appearance.attachments.belt.roughness ?? 0.65
+        });
+        const beltGeometry = new THREE.TorusGeometry(
+            appearance.attachments.belt.radius ?? 0.6,
+            appearance.attachments.belt.thickness ?? 0.1,
+            16,
+            32
+        );
+        const beltMesh = new THREE.Mesh(beltGeometry, beltMaterial);
+        beltMesh.name = 'enemyBelt';
+        beltMesh.rotation.x = Math.PI / 2;
+        beltMesh.castShadow = true;
+        beltMesh.receiveShadow = true;
+        beltMesh.position.y = appearance.attachments.belt.offsetY ?? -0.22;
+        (spineBone || baseModel).add(beltMesh);
+        enemyRobeGroup.userData.attachments.push(beltMesh);
+        trackAppearanceMaterial(enemyMesh.userData.appearanceMaterials, beltMaterial);
+    }
+}
 
 gltfLoader.load(
     'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
     gltf => {
         const model = gltf.scene;
-        model.traverse(child => {
-            if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                child.material = enemyMaterial;
-            }
-        });
         model.scale.set(0.8, 0.8, 0.8);
         model.position.set(0, -1.25, 0);
         model.rotation.y = Math.PI;
         enemyMesh.add(model);
+        enemyMesh.userData.baseModel = model;
+        applyEnemyAppearance();
+        updateEnemySkinOptions();
+        updateSkinSelectors();
     },
     undefined,
     error => {
         console.error('Failed to load enemy model', error);
     }
 );
+
+gameState.setAppearance = function setAppearance(target, appearanceKey) {
+    if (!appearanceKey) {
+        return false;
+    }
+
+    if (target === 'player' || target === gameState.player) {
+        if (gameState.player.availableAppearances &&
+            !gameState.player.availableAppearances.includes(appearanceKey)) {
+            return false;
+        }
+        gameState.player.appearanceSet = appearanceKey;
+        applyPlayerAppearance();
+        updateSkinSelectors();
+        return true;
+    }
+
+    let enemy = null;
+    if (typeof target === 'number') {
+        enemy = gameState.enemies[target] || null;
+    } else if (target && typeof target === 'object') {
+        enemy = target;
+    } else {
+        enemy = getCurrentEnemy();
+    }
+
+    if (!enemy) {
+        return false;
+    }
+
+    if (enemy.availableAppearances && !enemy.availableAppearances.includes(appearanceKey)) {
+        return false;
+    }
+
+    enemy.appearanceSet = appearanceKey;
+    if (enemy === getCurrentEnemy()) {
+        applyEnemyAppearance(enemy);
+        updateEnemySkinOptions(enemy);
+    }
+    updateSkinSelectors();
+    return true;
+};
 
 // Particle system for effects
 const effectClock = new THREE.Clock();
@@ -1639,8 +2387,7 @@ function usePlayerAbility(index) {
                 icon: ability.icon,
                 type: 'buff'
             });
-            playerMaterial.opacity = 0.3;
-            playerMaterial.transparent = true;
+            setPlayerAppearanceOpacity(0.3, true);
             addCombatMessage('You vanish into the shadows!', 'buff');
             triggerVisualEffect(ability, {
                 caster: gameState.player,
@@ -2249,13 +2996,14 @@ function resetGameState() {
     gameState.player.rootDuration = initialPlayerState.rootDuration;
     gameState.player.inCombat = initialPlayerState.inCombat;
     gameState.player.buffs = new Map();
+    gameState.player.appearanceSet = initialPlayerState.appearanceSet;
+    applyPlayerAppearance();
 
     gameState.player.abilities.forEach(ability => {
         ability.cooldown = 0;
     });
 
-    playerMaterial.opacity = 1;
-    playerMaterial.transparent = false;
+    setPlayerAppearanceOpacity(1, false);
 
     playerMesh.position.copy(gameState.player.position);
     playerMesh.rotation.y = gameState.player.rotation;
@@ -2294,6 +3042,7 @@ function resetGameState() {
         enemy.currentCast = null;
         enemy.isRooted = false;
         enemy.rootDuration = 0;
+        enemy.appearanceSet = initialEnemy.appearanceSet;
         enemy.aiState = initialEnemy.aiState;
         enemy.awareness = initialEnemy.awareness;
         enemy.detectCooldown = initialEnemy.detectCooldown;
@@ -2311,7 +3060,11 @@ function resetGameState() {
         enemyMesh.visible = true;
         enemyMesh.position.copy(firstEnemy.position);
         enemyMesh.rotation.y = firstEnemy.rotation;
+        applyEnemyAppearance(firstEnemy);
+        updateEnemySkinOptions(firstEnemy);
     }
+
+    updateSkinSelectors();
 
     gameState.currentTarget = 0;
     updateTargetIndicator();
@@ -2580,6 +3333,7 @@ window.addEventListener('resize', () => {
 
 // UI initialization
 initializeAbilityUI();
+initializeAppearanceSelectors();
 updateTargetIndicator();
 
 // Start messages
