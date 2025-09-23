@@ -578,6 +578,16 @@ function togglePause(forceState) {
     }
 
     updateUI();
+
+    const abilityElement = document.querySelector(`#abilities .ability[data-ability="${index}"]`);
+    if (abilityElement) {
+        abilityElement.classList.remove('activated');
+        void abilityElement.offsetWidth;
+        abilityElement.classList.add('activated');
+        abilityElement.addEventListener('animationend', () => {
+            abilityElement.classList.remove('activated');
+        }, { once: true });
+    }
 }
 function showEnemyCastBar(spellName, duration) {
     if (!enemyCastBarUI.container) return;
@@ -661,7 +671,9 @@ function renderAbilities() {
     const abilityHtml = gameState.player.abilities.map((ability, index) => `
         <div class="ability" data-ability="${index}">
             <span class="ability-key">${ability.key || index + 1}</span>
-            <span class="ability-icon">${ability.icon}</span>
+            <div class="ability-slot">
+                <span class="ability-icon">${ability.icon}</span>
+            </div>
             <span class="ability-name">${ability.label || ability.name}</span>
             <div class="ability-tooltip">
                 <div class="ability-tooltip-title">${ability.name}</div>
@@ -2783,6 +2795,16 @@ function usePlayerAbility(index) {
     }
 
     updateUI();
+
+    const abilityElement = document.querySelector(`#abilities .ability[data-ability="${index}"]`);
+    if (abilityElement) {
+        abilityElement.classList.remove('activated');
+        void abilityElement.offsetWidth;
+        abilityElement.classList.add('activated');
+        abilityElement.addEventListener('animationend', () => {
+            abilityElement.classList.remove('activated');
+        }, { once: true });
+    }
 }
 
 // Enemy AI
@@ -3508,7 +3530,8 @@ function updateUI() {
         }
 
         // Remove old cooldown overlay
-        const oldOverlay = element.querySelector('.cooldown-overlay');
+        const slot = element.querySelector('.ability-slot') || element;
+        const oldOverlay = slot.querySelector('.cooldown-overlay');
         if (oldOverlay) oldOverlay.remove();
 
         if (ability.cooldown > 0) {
@@ -3516,7 +3539,7 @@ function updateUI() {
             const overlay = document.createElement('div');
             overlay.className = 'cooldown-overlay';
             overlay.textContent = Math.ceil(ability.cooldown);
-            element.appendChild(overlay);
+            slot.appendChild(overlay);
         } else {
             element.classList.remove('on-cooldown');
         }

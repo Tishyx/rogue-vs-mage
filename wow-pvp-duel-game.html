@@ -5,60 +5,542 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D PvP Duel: Rogue vs Frost Mage</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        :root {
+            --hud-gap: clamp(0.75rem, 1.8vw, 1.8rem);
+            --hud-radius: clamp(0.9rem, 1.8vw, 1.6rem);
+            --hud-padding: clamp(0.6rem, 1.5vw, 1.6rem);
+            --hud-width: clamp(18rem, 28vw, 24rem);
+            --slot-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='white' d='M31 4h38l28 28v36l-28 28H31L3 68V32z'/%3E%3C/svg%3E");
+            --panel-gradient: linear-gradient(135deg, rgba(20, 28, 46, 0.92) 0%, rgba(6, 10, 18, 0.95) 100%);
+            --panel-border: rgba(130, 198, 255, 0.35);
+            --panel-shadow: 0 0.8rem 1.8rem rgba(5, 12, 24, 0.6), inset 0 0 0.1rem rgba(255, 255, 255, 0.08);
+        }
 
+        #ui {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: clamp(1rem, 3vh, 4rem);
+            padding: clamp(0.8rem, 2.6vw, 3rem);
+        }
+
+        .hud-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(var(--hud-width), 1fr));
+            justify-content: space-between;
+            gap: var(--hud-gap);
+            width: 100%;
+            pointer-events: none;
+        }
+
+        .hud-column {
+            display: grid;
+            gap: clamp(0.6rem, 1.4vw, 1.5rem);
+        }
+
+        .hud-column > * {
+            pointer-events: auto;
+        }
+
+        .bar-card {
+            position: relative;
+            display: grid;
+            gap: clamp(0.45rem, 1.1vw, 0.9rem);
+            padding: var(--hud-padding);
+            border-radius: var(--hud-radius);
+            background: var(--panel-gradient);
+            box-shadow: var(--panel-shadow);
+            overflow: hidden;
+            min-width: var(--hud-width);
+            backdrop-filter: blur(8px);
+        }
+
+        .bar-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%' stop-color='%23162233'/%3E%3Cstop offset='100%' stop-color='%23070c15'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='400' height='240' fill='url(%23g)'/%3E%3Cpath d='M0 200h400' stroke='rgba(146,201,255,0.08)' stroke-width='18'/%3E%3Cpath d='M60 0v240M200 0v240M340 0v240' stroke='rgba(146,201,255,0.05)' stroke-width='6'/%3E%3C/svg%3E");
+            background-size: cover;
+            mix-blend-mode: screen;
+            opacity: 0.55;
+        }
+
+        .bar-header {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: clamp(0.85rem, 1.4vw, 1.1rem);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #d5e9ff;
+            text-shadow: 0 0 0.6rem rgba(120, 200, 255, 0.55);
+        }
+
+        .bar-track {
+            position: relative;
+            height: clamp(0.85rem, 1.9vh, 1.2rem);
+            border-radius: clamp(0.6rem, 1vw, 1rem);
+            background: rgba(10, 16, 28, 0.85);
+            overflow: hidden;
+            box-shadow: inset 0 0 0.35rem rgba(0, 0, 0, 0.8);
+        }
+
+        .bar-track::after {
+            content: "";
+            position: absolute;
+            inset: -120% 0;
+            background: radial-gradient(circle at 50% 0%, rgba(120, 210, 255, 0.25), transparent 65%);
+            animation: barGlow 6s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        .bar-fill {
+            position: relative;
+            height: 100%;
+            border-radius: inherit;
+            transition: width 0.35s ease;
+            box-shadow: 0 0 1.2rem rgba(86, 194, 255, 0.45);
+        }
+
+        .health-bar {
+            background: linear-gradient(90deg, rgba(61, 236, 168, 0.95), rgba(12, 196, 255, 0.95));
+        }
+
+        .energy-bar {
+            background: linear-gradient(90deg, rgba(255, 203, 78, 0.95), rgba(255, 134, 22, 0.95));
+            box-shadow: 0 0 1rem rgba(255, 176, 45, 0.4);
+        }
+
+        .mana-bar {
+            background: linear-gradient(90deg, rgba(108, 184, 255, 0.95), rgba(74, 108, 255, 0.95));
+            box-shadow: 0 0 1rem rgba(122, 173, 255, 0.45);
+        }
+
+        @keyframes barGlow {
+            0%, 100% { opacity: 0.15; transform: translateY(0); }
+            50% { opacity: 0.45; transform: translateY(15%); }
+        }
+
+        .hud-footer {
+            display: grid;
+            width: 100%;
+            grid-template-columns: repeat(auto-fit, minmax(clamp(15rem, 30vw, 22rem), 1fr));
+            gap: var(--hud-gap);
+            align-items: start;
+        }
+
+        #combatLog, #controls {
+            position: relative;
+            width: 100%;
+            min-height: clamp(8rem, 20vh, 14rem);
+            margin: 0;
+            padding: var(--hud-padding);
+            border-radius: var(--hud-radius);
+            background: var(--panel-gradient);
+            box-shadow: var(--panel-shadow);
+            pointer-events: auto;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+        }
+
+        #combatLog {
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.3rem, 0.5vh, 0.45rem);
+            font-size: clamp(0.75rem, 1.1vw, 0.9rem);
+            overflow-y: auto;
+            height: auto;
+        }
+
+        #controls {
+            display: grid;
+            gap: clamp(0.4rem, 0.8vw, 0.75rem);
+            font-size: clamp(0.75rem, 1.1vw, 0.9rem);
+        }
+
+        .control-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: clamp(0.35rem, 0.8vw, 0.8rem);
+            background: rgba(18, 28, 42, 0.65);
+            padding: clamp(0.35rem, 0.9vh, 0.65rem);
+            border-radius: clamp(0.4rem, 1vw, 0.8rem);
+            box-shadow: inset 0 0 0.25rem rgba(118, 186, 255, 0.25);
+            margin: 0;
+        }
+
+        .control-item label {
+            flex: 1 1 auto;
+        }
+
+        .control-item select {
+            flex: 0 0 clamp(6rem, 10vw, 8rem);
+            border-radius: 999px;
+            border: none;
+            padding: clamp(0.25rem, 0.6vh, 0.5rem) clamp(0.6rem, 1.2vw, 1rem);
+            background: linear-gradient(135deg, rgba(50, 80, 120, 0.9), rgba(30, 40, 70, 0.9));
+            color: #d5e9ff;
+        }
+
+        #comboPoints {
+            position: relative;
+            display: grid;
+            grid-auto-flow: column;
+            justify-content: flex-start;
+            gap: clamp(0.35rem, 0.8vw, 0.8rem);
+            padding: clamp(0.3rem, 0.7vw, 0.6rem) clamp(0.6rem, 1.6vw, 1.2rem);
+            border-radius: clamp(0.6rem, 1.4vw, 1.1rem);
+            background: linear-gradient(135deg, rgba(38, 31, 16, 0.9), rgba(66, 42, 10, 0.92));
+            box-shadow: 0 0.6rem 1.4rem rgba(20, 10, 0, 0.5), inset 0 0 0.2rem rgba(255, 214, 102, 0.3);
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+        }
+
+        #playerBuffs {
+            position: relative;
+            display: flex;
+            flex-wrap: wrap;
+            gap: clamp(0.4rem, 0.9vw, 0.9rem);
+            padding: clamp(0.35rem, 0.9vw, 0.8rem);
+            border-radius: clamp(0.6rem, 1.4vw, 1.1rem);
+            background: linear-gradient(135deg, rgba(16, 32, 38, 0.9), rgba(24, 16, 36, 0.9));
+            box-shadow: 0 0.6rem 1.4rem rgba(4, 10, 20, 0.55), inset 0 0 0.2rem rgba(146, 201, 255, 0.25);
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+        }
+
+        #playerBuffs .buff-icon {
+            pointer-events: auto;
+        }
+
+        #enemyCastBar {
+            position: relative;
+            width: 100%;
+            min-height: clamp(1.8rem, 3.6vh, 2.4rem);
+            padding: clamp(0.35rem, 0.8vw, 0.6rem);
+            border-radius: clamp(0.75rem, 1.4vw, 1.2rem);
+            background: linear-gradient(135deg, rgba(10, 18, 36, 0.92), rgba(8, 12, 24, 0.96));
+            box-shadow: var(--panel-shadow);
+            overflow: hidden;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+        }
+
+        #enemyCastBar .cast-progress {
+            position: absolute;
+            left: clamp(0.25rem, 0.6vw, 0.45rem);
+            top: clamp(0.25rem, 0.6vw, 0.45rem);
+            bottom: clamp(0.25rem, 0.6vw, 0.45rem);
+            border-radius: clamp(0.6rem, 1vw, 0.9rem);
+            background: linear-gradient(90deg, rgba(84, 180, 255, 0.95), rgba(44, 108, 255, 0.95));
+            width: 0;
+            box-shadow: 0 0 1.2rem rgba(84, 180, 255, 0.45);
+        }
+
+        #enemyCastBar .cast-text {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(0.75rem, 1.2vw, 0.95rem);
+            color: #dce9ff;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        #targetIndicator {
+            position: relative;
+            align-self: center;
+            padding: clamp(0.4rem, 0.9vw, 0.75rem) clamp(1rem, 2.6vw, 2.2rem);
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(54, 18, 24, 0.92), rgba(92, 28, 36, 0.92));
+            color: #ffdede;
+            font-size: clamp(0.75rem, 1.4vw, 1rem);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            box-shadow: 0 0.5rem 1.2rem rgba(82, 8, 16, 0.6);
+            pointer-events: auto;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+            transform: none;
+        }
+
+        #abilities {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(clamp(3.4rem, 6vw, 4.8rem), 1fr));
+            gap: clamp(0.5rem, 1.4vw, 1.4rem);
+            align-self: center;
+            width: clamp(20rem, 68vw, 48rem);
+            padding: clamp(0.8rem, 1.8vw, 2rem);
+            border-radius: clamp(1.2rem, 2.4vw, 2.8rem);
+            background: linear-gradient(135deg, rgba(16, 24, 40, 0.92), rgba(6, 10, 24, 0.96));
+            box-shadow: 0 1.4rem 2.6rem rgba(4, 8, 18, 0.6), inset 0 0 0.25rem rgba(146, 201, 255, 0.2);
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+            transform: none;
+        }
+
+        .ability {
+            position: relative;
+            display: grid;
+            justify-items: center;
+            gap: clamp(0.35rem, 0.8vw, 0.6rem);
+            cursor: pointer;
+        }
+
+        .ability-slot {
+            position: relative;
+            width: clamp(3.2rem, 5.6vw, 4.6rem);
+            aspect-ratio: 1;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(58, 92, 156, 0.95), rgba(26, 36, 64, 0.95));
+            border-radius: clamp(0.8rem, 1.6vw, 1.4rem);
+            box-shadow: 0 1rem 1.6rem rgba(8, 14, 32, 0.65), 0 0 1rem rgba(90, 180, 255, 0.45) inset;
+            -webkit-mask-image: var(--slot-mask);
+            mask-image: var(--slot-mask);
+            -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+            -webkit-mask-size: contain;
+            mask-size: contain;
+            overflow: hidden;
+        }
+
+        .ability-slot::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='rgba(160,220,255,0.3)' stroke-width='4'%3E%3Cpath d='M20 10h100l20 20v80l-20 20H20L0 110V30z'/%3E%3Cpath d='M30 20h80l14 14v72l-14 14H30L16 106V34z'/%3E%3C/g%3E%3C/svg%3E");
+            background-size: cover;
+            mix-blend-mode: screen;
+            opacity: 0.65;
+            z-index: 1;
+        }
+
+        .ability-icon {
+            position: relative;
+            font-size: clamp(1.4rem, 2.8vw, 2.2rem);
+            filter: drop-shadow(0 0 0.45rem rgba(255, 255, 255, 0.6));
+            z-index: 3;
+        }
+
+        .ability-name {
+            font-size: clamp(0.65rem, 1vw, 0.85rem);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #9dbaf5;
+            text-align: center;
+        }
+
+        .ability-key {
+            position: absolute;
+            top: clamp(0.2rem, 0.4vw, 0.35rem);
+            left: clamp(0.3rem, 0.6vw, 0.5rem);
+            font-size: clamp(0.55rem, 0.9vw, 0.75rem);
+            color: rgba(173, 208, 255, 0.8);
+            letter-spacing: 0.08em;
+        }
+
+        .ability:not(.on-cooldown) .ability-slot {
+            animation: abilityReadyPulse 5s ease-in-out infinite;
+        }
+
+        .ability.on-cooldown .ability-slot {
+            filter: saturate(0.6) brightness(0.7);
+        }
+
+        .ability.on-cooldown .ability-slot::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(200deg, rgba(8, 10, 18, 0.85), rgba(18, 26, 44, 0.95));
+            animation: abilityCooldownSweep 1.4s linear infinite;
+            opacity: 0.85;
+            z-index: 2;
+        }
+
+        .ability.activated .ability-slot {
+            animation: abilityActivateFlash 0.55s ease-out;
+        }
+
+        .cooldown-overlay {
+            position: absolute;
+            inset: clamp(0.35rem, 0.8vw, 0.6rem);
+            display: grid;
+            place-items: center;
+            font-size: clamp(0.9rem, 1.6vw, 1.2rem);
+            color: #ffec90;
+            font-weight: 700;
+            text-shadow: 0 0.35rem 0.6rem rgba(0, 0, 0, 0.6);
+            border-radius: clamp(0.6rem, 1.2vw, 1rem);
+            background: rgba(8, 8, 16, 0.75);
+            box-shadow: inset 0 0 0.35rem rgba(255, 255, 255, 0.15);
+            pointer-events: none;
+            z-index: 4;
+        }
+
+        .ability-tooltip {
+            bottom: calc(100% + clamp(0.6rem, 1.2vw, 1rem));
+            border-radius: clamp(0.6rem, 1.2vw, 1rem);
+            background: rgba(12, 16, 30, 0.95);
+            border: 1px solid rgba(146, 201, 255, 0.3);
+            padding: clamp(0.5rem, 1vw, 0.8rem);
+            box-shadow: 0 1rem 2rem rgba(4, 6, 12, 0.65);
+        }
+
+        .ability-tooltip-title {
+            font-size: clamp(0.75rem, 1.1vw, 0.9rem);
+        }
+
+        .ability-tooltip-cooldown {
+            font-size: clamp(0.65rem, 0.95vw, 0.8rem);
+        }
+
+        .ability-tooltip-remaining {
+            font-size: clamp(0.65rem, 0.95vw, 0.8rem);
+        }
+
+        @keyframes abilityReadyPulse {
+            0%, 100% { box-shadow: 0 1rem 1.6rem rgba(30, 80, 160, 0.55), 0 0 1rem rgba(90, 180, 255, 0.5) inset; }
+            50% { box-shadow: 0 1.4rem 1.8rem rgba(60, 140, 255, 0.75), 0 0 1.3rem rgba(160, 230, 255, 0.65) inset; }
+        }
+
+        @keyframes abilityCooldownSweep {
+            0% { transform: translateY(-6%); opacity: 0.9; }
+            50% { opacity: 0.75; }
+            100% { transform: translateY(6%); opacity: 0.9; }
+        }
+
+        @keyframes abilityActivateFlash {
+            0% { filter: brightness(1) saturate(1); box-shadow: 0 1rem 1.6rem rgba(0, 0, 0, 0.6); }
+            30% { filter: brightness(1.6) saturate(1.4); box-shadow: 0 1.4rem 2.2rem rgba(255, 224, 122, 0.6); }
+            100% { filter: brightness(1) saturate(1); box-shadow: 0 1rem 1.6rem rgba(0, 0, 0, 0.6); }
+        }
+
+        @media (max-width: 980px) {
+            .hud-grid {
+                grid-template-columns: minmax(0, 1fr);
+                justify-items: center;
+            }
+
+            .bar-card {
+                min-width: clamp(18rem, 70vw, 24rem);
+            }
+
+            .hud-footer {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        @media (max-width: 640px) {
+            #abilities {
+                width: 100%;
+            }
+
+            .ability-name {
+                display: none;
+            }
+        }
+    </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-    
+
     <div id="ui">
-        <div id="playerHealth" class="health-bar-container">
-            <div class="bar-text">Rogue: <span id="playerHpText">100/100</span></div>
-            <div class="health-bar" style="width: 100%"></div>
-        </div>
-        
-        <div id="playerEnergy" class="resource-bar-container">
-            <div class="bar-text resource-text">Energy: <span id="playerEnergyText">100/100</span></div>
-            <div class="energy-bar" style="width: 100%"></div>
-        </div>
+        <div class="hud-grid">
+            <div class="hud-column hud-column-left">
+                <div id="playerHealth" class="bar-card">
+                    <div class="bar-header">
+                        <span>Rogue</span>
+                        <span id="playerHpText">100/100</span>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill health-bar" style="width: 100%"></div>
+                    </div>
+                </div>
 
-        <div id="comboPoints"></div>
+                <div id="playerEnergy" class="bar-card">
+                    <div class="bar-header">
+                        <span>Energy</span>
+                        <span id="playerEnergyText">100/100</span>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill energy-bar" style="width: 100%"></div>
+                    </div>
+                </div>
 
-        <div id="playerBuffs"></div>
+                <div id="comboPoints"></div>
 
-        <div id="enemyHealth" class="health-bar-container">
-            <div class="bar-text">Frost Mage: <span id="enemyHpText">100/100</span></div>
-            <div class="health-bar" style="width: 100%"></div>
-        </div>
-        
-        <div id="enemyMana" class="resource-bar-container">
-            <div class="bar-text resource-text">Mana: <span id="enemyManaText">100/100</span></div>
-            <div class="mana-bar" style="width: 100%"></div>
-        </div>
-
-        <div id="enemyCastBar">
-            <div class="cast-progress"></div>
-            <div class="cast-text">Ready</div>
-        </div>
-        
-        <div id="targetIndicator">Target: Frost Mage</div>
-        
-        <div id="abilities"></div>
-        
-        <div id="combatLog"></div>
-
-        <div id="controls">
-            <div class="control-item"><strong>Movement:</strong> WASD</div>
-            <div class="control-item"><strong>Camera:</strong> Mouse</div>
-            <div class="control-item"><strong>Jump:</strong> Space</div>
-            <div class="control-item"><strong>Abilities:</strong> 1-7</div>
-            <div class="control-item"><strong>Target:</strong> Tab</div>
-            <div class="control-item">
-                <label for="playerSkinSelect"><strong>Rogue Skin:</strong></label>
-                <select id="playerSkinSelect"></select>
+                <div id="playerBuffs"></div>
             </div>
-            <div class="control-item">
-                <label for="enemySkinSelect"><strong>Mage Skin:</strong></label>
-                <select id="enemySkinSelect"></select>
+
+            <div class="hud-column hud-column-right">
+                <div id="enemyHealth" class="bar-card">
+                    <div class="bar-header">
+                        <span>Frost Mage</span>
+                        <span id="enemyHpText">100/100</span>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill health-bar" style="width: 100%"></div>
+                    </div>
+                </div>
+
+                <div id="enemyMana" class="bar-card">
+                    <div class="bar-header">
+                        <span>Mana</span>
+                        <span id="enemyManaText">100/100</span>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill mana-bar" style="width: 100%"></div>
+                    </div>
+                </div>
+
+                <div id="enemyCastBar">
+                    <div class="cast-progress"></div>
+                    <div class="cast-text">Ready</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="targetIndicator">Target: Frost Mage</div>
+
+        <div id="abilities"></div>
+
+        <div class="hud-footer">
+            <div id="combatLog"></div>
+
+            <div id="controls">
+                <div class="control-item"><strong>Movement:</strong> WASD</div>
+                <div class="control-item"><strong>Camera:</strong> Mouse</div>
+                <div class="control-item"><strong>Jump:</strong> Space</div>
+                <div class="control-item"><strong>Abilities:</strong> 1-7</div>
+                <div class="control-item"><strong>Target:</strong> Tab</div>
+                <div class="control-item">
+                    <label for="playerSkinSelect"><strong>Rogue Skin:</strong></label>
+                    <select id="playerSkinSelect"></select>
+                </div>
+                <div class="control-item">
+                    <label for="enemySkinSelect"><strong>Mage Skin:</strong></label>
+                    <select id="enemySkinSelect"></select>
+                </div>
             </div>
         </div>
 
