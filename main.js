@@ -736,7 +736,7 @@ function initializeAppearanceSelectors() {
 
 // Initialize Three.js
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000033, 10, 100);
+scene.fog = new THREE.FogExp2(0x1c1f2a, 0.015);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
@@ -746,6 +746,9 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 
 const textureLoader = new THREE.TextureLoader();
+textureLoader.setCrossOrigin('anonymous');
+const imageLoader = new THREE.ImageLoader();
+imageLoader.setCrossOrigin('anonymous');
 const gltfLoader = new THREE.GLTFLoader();
 
 const clothingTextureCache = new Map();
@@ -797,6 +800,301 @@ function loadTextureWithOptions(url, options = {}) {
 
     clothingTextureCache.set(url, texture);
     return texture;
+}
+
+const environmentTextures = {
+    terrain: {
+        albedo: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/rockyground06/rockyground06_diff_4k.jpg',
+        normal: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/rockyground06/rockyground06_nor_gl_4k.jpg',
+        roughness: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/rockyground06/rockyground06_rough_4k.jpg',
+        height: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/rockyground06/rockyground06_disp_4k.jpg'
+    },
+    rocks: {
+        albedo: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rock_wall_03/rock_wall_03_diff_2k.jpg',
+        normal: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rock_wall_03/rock_wall_03_nor_gl_2k.jpg',
+        roughness: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rock_wall_03/rock_wall_03_rough_2k.jpg'
+    }
+};
+
+let terrainHeightSampler = null;
+
+function applyHeightMapToGeometry(geometry, url, heightScale = 6) {
+    return new Promise(resolve => {
+        imageLoader.load(url, image => {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.width;
+            canvas.height = image.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0);
+            const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            const position = geometry.attributes.position;
+            const widthSegments = geometry.parameters.widthSegments;
+            const heightSegments = geometry.parameters.heightSegments;
+            const vertexRowLength = widthSegments + 1;
+
+            for (let y = 0; y <= heightSegments; y++) {
+                for (let x = 0; x <= widthSegments; x++) {
+                    const u = x / widthSegments;
+                    const v = y / heightSegments;
+                    const ix = Math.floor(u * (canvas.width - 1));
+                    const iy = Math.floor((1 - v) * (canvas.height - 1));
+                    const pixelIndex = (iy * canvas.width + ix) * 4;
+                    const heightValue = data[pixelIndex] / 255;
+                    const vertexIndex = y * vertexRowLength + x;
+                    position.setZ(vertexIndex, heightValue * heightScale);
+                }
+            }
+
+            position.needsUpdate = true;
+            geometry.computeVertexNormals();
+
+            const sampler = (worldX, worldZ) => {
+                const width = geometry.parameters.width;
+                const height = geometry.parameters.height;
+                if (!width || !height) {
+                    return 0;
+                }
+
+                const normalizedX = THREE.MathUtils.clamp(worldX / width + 0.5, 0, 1);
+                const normalizedZ = THREE.MathUtils.clamp(worldZ / height + 0.5, 0, 1);
+                const sampleX = Math.floor(normalizedX * (canvas.width - 1));
+                const sampleY = Math.floor((1 - normalizedZ) * (canvas.height - 1));
+                const sampleIndex = (sampleY * canvas.width + sampleX) * 4;
+                return (data[sampleIndex] / 255) * heightScale;
+            };
+
+            resolve(sampler);
+        }, undefined, () => resolve(null));
+    });
+}
+
+function sampleTerrainHeight(x, z) {
+    return terrainHeightSampler ? terrainHeightSampler(x, z) : 0;
+}
+
+const instancingHelper = new THREE.Object3D();
+
+function scatterInstancedMeshes({
+    geometry,
+    material,
+    count,
+    minRadius,
+    maxRadius,
+    minScale = 1,
+    maxScale = 1.5,
+    yOffset = 0
+}) {
+    const mesh = new THREE.InstancedMesh(geometry, material, count);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = THREE.MathUtils.lerp(minRadius, maxRadius, Math.random());
+        const scale = THREE.MathUtils.lerp(minScale, maxScale, Math.random());
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const y = sampleTerrainHeight(x, z) + yOffset;
+
+        instancingHelper.position.set(x, y, z);
+        instancingHelper.rotation.set(0, Math.random() * Math.PI * 2, 0);
+        instancingHelper.scale.setScalar(scale);
+        instancingHelper.updateMatrix();
+        mesh.setMatrixAt(i, instancingHelper.matrix);
+    }
+
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+    return mesh;
+}
+
+function createArenaPillars(radius = 32, pillarCount = 8) {
+    const pillarGeometry = new THREE.CylinderGeometry(1.2, 1.6, 12, 12);
+    const pillarMaterial = new THREE.MeshStandardMaterial({
+        color: 0x4a4a6a,
+        roughness: 0.6,
+        metalness: 0.2
+    });
+
+    for (let i = 0; i < pillarCount; i++) {
+        const angle = (i / pillarCount) * Math.PI * 2;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+        pillar.castShadow = true;
+        pillar.receiveShadow = true;
+        pillar.position.set(x, sampleTerrainHeight(x, z) + 6, z);
+        pillar.lookAt(0, pillar.position.y, 0);
+        scene.add(pillar);
+    }
+}
+
+const treeTrunkGeometry = new THREE.CylinderGeometry(0.25, 0.35, 2.6, 8);
+const treeFoliageGeometry = new THREE.ConeGeometry(1.6, 3.8, 9);
+const treeTrunkMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8b5a2b,
+    roughness: 0.9,
+    metalness: 0.05
+});
+const treeFoliageMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1f4d2a,
+    roughness: 0.6,
+    metalness: 0.1
+});
+
+function scatterTrees(treeCount = 18, minRadius = 10, maxRadius = 34) {
+    for (let i = 0; i < treeCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = THREE.MathUtils.lerp(minRadius, maxRadius, Math.random());
+        const scale = THREE.MathUtils.lerp(0.8, 1.6, Math.random());
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const y = sampleTerrainHeight(x, z);
+
+        const tree = new THREE.Group();
+        const trunk = new THREE.Mesh(treeTrunkGeometry, treeTrunkMaterial);
+        trunk.position.y = 1.3;
+        trunk.castShadow = true;
+        trunk.receiveShadow = true;
+        tree.add(trunk);
+
+        const foliage = new THREE.Mesh(treeFoliageGeometry, treeFoliageMaterial);
+        foliage.position.y = 2.6 + 1.9;
+        foliage.castShadow = true;
+        foliage.receiveShadow = true;
+        tree.add(foliage);
+
+        tree.position.set(x, y, z);
+        tree.scale.setScalar(scale);
+        tree.rotation.y = Math.random() * Math.PI * 2;
+        scene.add(tree);
+    }
+}
+
+const bannerPoleGeometry = new THREE.CylinderGeometry(0.12, 0.16, 6, 10);
+const bannerBaseGeometry = new THREE.CylinderGeometry(0.5, 0.6, 0.4, 10);
+const bannerClothGeometry = new THREE.PlaneGeometry(2.2, 3.4, 4, 8);
+const bannerPoleMaterial = new THREE.MeshStandardMaterial({
+    color: 0xa3a5b1,
+    roughness: 0.35,
+    metalness: 0.6
+});
+const bannerBaseMaterial = new THREE.MeshStandardMaterial({
+    color: 0x272733,
+    roughness: 0.7,
+    metalness: 0.15
+});
+const bannerClothMaterial = new THREE.MeshStandardMaterial({
+    color: 0x7d1a2f,
+    roughness: 0.55,
+    metalness: 0.2,
+    side: THREE.DoubleSide
+});
+
+function createBattleBanners(bannerCount = 6, radius = 22) {
+    for (let i = 0; i < bannerCount; i++) {
+        const group = new THREE.Group();
+        const pole = new THREE.Mesh(bannerPoleGeometry, bannerPoleMaterial);
+        pole.position.y = 3;
+        pole.castShadow = true;
+        pole.receiveShadow = true;
+        group.add(pole);
+
+        const base = new THREE.Mesh(bannerBaseGeometry, bannerBaseMaterial);
+        base.position.y = 0.2;
+        base.receiveShadow = true;
+        group.add(base);
+
+        const cloth = new THREE.Mesh(bannerClothGeometry, bannerClothMaterial);
+        cloth.position.set(1.1, 3.4, 0);
+        cloth.rotation.y = Math.PI / 2;
+        cloth.castShadow = true;
+        cloth.receiveShadow = true;
+        group.add(cloth);
+
+        const angle = (i / bannerCount) * Math.PI * 2;
+        const radiusVariation = THREE.MathUtils.lerp(-2, 2, Math.random());
+        const x = Math.cos(angle) * (radius + radiusVariation);
+        const z = Math.sin(angle) * (radius + radiusVariation);
+        const y = sampleTerrainHeight(x, z);
+        group.position.set(x, y, z);
+        group.lookAt(0, y, 0);
+        scene.add(group);
+    }
+}
+
+function scatterRocks(minRadius = 12, maxRadius = 36) {
+    const rockGeometry = new THREE.IcosahedronGeometry(1.6, 1);
+    const rockMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        map: loadTextureWithOptions(environmentTextures.rocks.albedo, {
+            encoding: 'sRGB',
+            repeat: [3, 3],
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        }),
+        normalMap: loadTextureWithOptions(environmentTextures.rocks.normal, {
+            repeat: [3, 3],
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        }),
+        roughnessMap: loadTextureWithOptions(environmentTextures.rocks.roughness, {
+            repeat: [3, 3],
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        })
+    });
+
+    scatterInstancedMeshes({
+        geometry: rockGeometry,
+        material: rockMaterial,
+        count: 48,
+        minRadius,
+        maxRadius,
+        minScale: 0.5,
+        maxScale: 2.2,
+        yOffset: 0
+    });
+}
+
+function initEnvironment() {
+    const terrainSize = 80;
+    const terrainSegments = 256;
+    const groundGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, terrainSegments, terrainSegments);
+    const groundMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        map: loadTextureWithOptions(environmentTextures.terrain.albedo, {
+            encoding: 'sRGB',
+            repeat: [12, 12],
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        }),
+        normalMap: loadTextureWithOptions(environmentTextures.terrain.normal, {
+            repeat: [12, 12],
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        }),
+        roughnessMap: loadTextureWithOptions(environmentTextures.terrain.roughness, {
+            repeat: [12, 12],
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping
+        })
+    });
+
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    ground.name = 'arenaGround';
+    scene.add(ground);
+
+    applyHeightMapToGeometry(groundGeometry, environmentTextures.terrain.height, 7).then(sampler => {
+        terrainHeightSampler = sampler || ((x, z) => 0);
+        createArenaPillars();
+        scatterRocks();
+        scatterTrees();
+        createBattleBanners();
+    });
 }
 
 const characterAppearances = {
@@ -1078,29 +1376,7 @@ directionalLight.shadow.camera.top = 50;
 directionalLight.shadow.camera.bottom = -50;
 scene.add(directionalLight);
 
-// Arena floor
-const floorGeometry = new THREE.CircleGeometry(30, 32);
-const floorMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0x2a2a3a,
-    roughness: 0.8,
-    metalness: 0.2
-});
-const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-floor.rotation.x = -Math.PI / 2;
-floor.receiveShadow = true;
-scene.add(floor);
-
-// Arena walls (pillars)
-const pillarGeometry = new THREE.CylinderGeometry(1, 1, 10, 8);
-const pillarMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a6a });
-
-for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 2;
-    const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
-    pillar.position.set(Math.cos(angle) * 25, 5, Math.sin(angle) * 25);
-    pillar.castShadow = true;
-    scene.add(pillar);
-}
+initEnvironment();
 
 // Create player (Rogue)
 const playerMesh = new THREE.Group();
