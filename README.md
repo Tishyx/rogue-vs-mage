@@ -1,33 +1,30 @@
-<div align="center">
+# Rogue vs Mage
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-
-  <h1>Built with AI Studio</h1>
-
-  <p>The fastest path from prompt to production with Gemini.</p>
-
-  <a href="https://aistudio.google.com/apps">Start building</a>
-
-</div>
+The duel now boots through a small React + Vite shell so that the HUD markup can live in JSX while the original Three.js gameplay stays untouched in `public/main.js`.
 
 ## Project Structure
 
-This project now keeps presentation, styling, and game logic in dedicated files so it is easier to maintain as new features land:
+- `index.html` – Vite entry document that loads React and the legacy Three.js scripts from CDNs.
+- `src/App.tsx` – Renders the HUD, control panels, and canvas that the legacy engine expects.
+- `src/styles.css` – Consolidated styling for both the legacy layout and the modern HUD treatment.
+- `public/main.js` – The original game logic wrapped in a `startGame()` bootstrap so it can wait for React to finish rendering.
+- `wow-pvp-duel-game.html` – Previous static prototype kept around for reference.
 
-- `wow-pvp-duel-game.html` – HTML shell that wires together the UI and loads the assets.
-- `styles.css` – Standalone stylesheet for every HUD component and overlay.
-- `main.js` – The complete Three.js powered duel simulation and UI controller.
+## Getting Started
 
-## Local Development
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Start a dev server with hot reload:
+   ```bash
+   npm run dev
+   ```
+3. Open the printed local URL. The legacy duel will start once the page is ready.
 
-Open `wow-pvp-duel-game.html` in any modern browser to play the duel locally. Changes to `styles.css` or `main.js` are picked up on refresh. For an even smoother workflow, run a lightweight static server such as `python -m http.server` from the project root and visit `http://localhost:8000`.
+To produce a static build run `npm run build`, then serve the `dist/` folder (`npm run preview` spins up a local preview server automatically).
 
-## Next Steps
+## Notes
 
-With the code split into logical layers, you can now:
-
-- Add build tooling or linting targeted to JavaScript or CSS specifically.
-- Expand the game logic in `main.js` without wrestling with embedded markup.
-- Introduce additional pages that share the same styles or scripts.
-
-This structure should make future iterations and contributions significantly easier.
+- The Three.js libraries are still loaded from CDNs. Swap them for npm dependencies when you are ready to own the render pipeline inside the bundler.
+- Because `public/main.js` manipulates the DOM directly, avoid re-rendering or conditionally unmounting the HUD nodes from React until the legacy logic is migrated.
