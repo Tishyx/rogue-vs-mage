@@ -1,0 +1,953 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    background: #000;
+    cursor: crosshair;
+}
+
+#gameCanvas {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+}
+
+#ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    user-select: none;
+}
+
+.health-bar-container {
+    position: absolute;
+    width: 300px;
+    height: 30px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #333;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+#playerHealth {
+    top: 20px;
+    left: 20px;
+}
+
+#enemyHealth {
+    top: 20px;
+    right: 20px;
+}
+
+.health-bar {
+    height: 100%;
+    background: linear-gradient(to bottom, #4caf50, #2e7d32);
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.mana-bar {
+    height: 100%;
+    background: linear-gradient(to bottom, #2196f3, #1565c0);
+    transition: width 0.3s ease;
+}
+
+.resource-bar-container {
+    position: absolute;
+    width: 300px;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #333;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+#playerEnergy {
+    top: 55px;
+    left: 20px;
+}
+
+#comboPoints {
+    position: absolute;
+    top: 80px;
+    left: 20px;
+    display: flex;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.65);
+    border: 2px solid rgba(255, 215, 0, 0.6);
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    transition: transform 0.25s ease;
+}
+
+#comboPoints.combo-change {
+    transform: scale(1.08);
+}
+
+.combo-point {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 215, 0, 0.8);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 6px rgba(255, 215, 0, 0.25);
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.combo-point.active {
+    background: radial-gradient(circle at center, #ffd54f 0%, #ffa000 80%);
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.8);
+    transform: scale(1.1);
+}
+
+#enemyMana {
+    top: 55px;
+    right: 20px;
+}
+
+#enemyCastBar {
+    position: absolute;
+    top: 85px;
+    right: 20px;
+    width: 300px;
+    height: 24px;
+    background: rgba(0, 0, 0, 0.75);
+    border: 2px solid #163b63;
+    border-radius: 5px;
+    overflow: hidden;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#enemyCastBar.active {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+#enemyCastBar .cast-progress {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(to right, #7dd0ff, #2a7edc);
+    transition: width 0.05s linear;
+}
+
+#enemyCastBar .cast-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #f5f9ff;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+}
+
+#enemyCastBar.interrupted .cast-progress {
+    background: linear-gradient(to right, #ff7a7a, #d32f2f);
+}
+
+#enemyCastBar.interrupted .cast-text {
+    color: #ffdede;
+}
+
+.energy-bar {
+    height: 100%;
+    background: linear-gradient(to bottom, #ffeb3b, #f57c00);
+    transition: width 0.3s ease;
+}
+
+.bar-text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    color: white;
+    font-size: 12px;
+    line-height: 30px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    z-index: 1;
+}
+
+.resource-text {
+    line-height: 20px;
+    font-size: 11px;
+}
+
+#playerBuffs {
+    position: absolute;
+    top: 90px;
+    left: 20px;
+    display: flex;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.buff-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.65);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #fff;
+    position: relative;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.buff-icon.buff {
+    border-color: rgba(76, 175, 80, 0.8);
+}
+
+.buff-icon.debuff {
+    border-color: rgba(244, 67, 54, 0.8);
+}
+
+.buff-timer {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+#abilities {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+.ability {
+    width: 60px;
+    height: 60px;
+    background: rgba(30, 30, 30, 0.9);
+    border: 3px solid #444;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.ability:hover {
+    border-color: #888;
+    transform: scale(1.05);
+}
+
+.ability.on-cooldown {
+    filter: brightness(0.3);
+    cursor: not-allowed;
+}
+
+.ability-icon {
+    font-size: 24px;
+    margin-bottom: 2px;
+}
+
+.ability-name {
+    font-size: 10px;
+    text-align: center;
+}
+
+.ability-key {
+    font-size: 10px;
+    color: #aaa;
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-weight: bold;
+}
+
+.cooldown-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: yellow;
+    font-size: 18px;
+    font-weight: bold;
+    border-radius: 5px;
+}
+
+#combatLog {
+    position: absolute;
+    bottom: 100px;
+    left: 20px;
+    width: 300px;
+    height: 150px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid #333;
+    border-radius: 5px;
+    padding: 10px;
+    overflow-y: auto;
+    font-size: 12px;
+    color: #ccc;
+}
+
+.combat-message {
+    margin: 2px 0;
+    animation: fadeIn 0.3s;
+}
+
+.damage { color: #ff6b6b; }
+.heal { color: #4caf50; }
+.ability-use { color: #64b5f6; }
+.buff { color: #ffeb3b; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+#gameStatus {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 48px;
+    color: white;
+    text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+    display: none;
+    text-align: center;
+}
+
+#overlayContainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.65);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+    pointer-events: none;
+}
+
+#overlayContainer.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+#overlayContainer .overlay-content {
+    background: rgba(12, 12, 20, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 30px 40px;
+    text-align: center;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+    min-width: 320px;
+}
+
+#overlayContainer .overlay-title {
+    font-size: 36px;
+    margin-bottom: 10px;
+    color: #f5f5f5;
+    text-shadow: 0 3px 8px rgba(0, 0, 0, 0.7);
+}
+
+#overlayContainer.victory .overlay-title {
+    color: #44ff44;
+}
+
+#overlayContainer.defeat .overlay-title {
+    color: #ff5555;
+}
+
+#overlayContainer.paused .overlay-title {
+    color: #ffeb3b;
+}
+
+#overlayContainer .overlay-subtitle {
+    font-size: 16px;
+    color: #d0d4ff;
+    margin-bottom: 24px;
+    line-height: 1.4;
+    white-space: pre-line;
+}
+
+.overlay-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.overlay-button {
+    padding: 12px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #3f51b5, #5c6bc0);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.overlay-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+    filter: brightness(1.1);
+}
+
+.overlay-button:active {
+    transform: translateY(0);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.overlay-button.secondary {
+    background: linear-gradient(135deg, #009688, #26a69a);
+}
+
+#controls {
+    position: absolute;
+    top: 100px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 15px;
+    border-radius: 5px;
+    color: white;
+    font-size: 12px;
+}
+
+.control-item {
+    margin: 5px 0;
+}
+
+#targetIndicator {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #ff6b6b;
+    font-size: 14px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 5px 15px;
+    border-radius: 5px;
+    border: 2px solid #ff6b6b;
+}
+
+.ability-tooltip {
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10, 10, 10, 0.92);
+    border: 1px solid #666;
+    border-radius: 6px;
+    padding: 8px;
+    color: #fff;
+    font-size: 11px;
+    width: 180px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    display: none;
+    text-align: left;
+    z-index: 10;
+}
+
+.ability-tooltip-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.ability-tooltip-cooldown {
+    color: #64b5f6;
+    margin-top: 6px;
+}
+
+.ability-tooltip-remaining {
+    margin-top: 4px;
+    color: #ffeb3b;
+    font-weight: bold;
+}
+
+        :root {
+            --hud-gap: clamp(0.75rem, 1.8vw, 1.8rem);
+            --hud-radius: clamp(0.9rem, 1.8vw, 1.6rem);
+            --hud-padding: clamp(0.6rem, 1.5vw, 1.6rem);
+            --hud-width: clamp(18rem, 28vw, 24rem);
+            --slot-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='white' d='M31 4h38l28 28v36l-28 28H31L3 68V32z'/%3E%3C/svg%3E");
+            --panel-gradient: linear-gradient(135deg, rgba(20, 28, 46, 0.92) 0%, rgba(6, 10, 18, 0.95) 100%);
+            --panel-border: rgba(130, 198, 255, 0.35);
+            --panel-shadow: 0 0.8rem 1.8rem rgba(5, 12, 24, 0.6), inset 0 0 0.1rem rgba(255, 255, 255, 0.08);
+        }
+
+        #ui {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: clamp(1rem, 3vh, 4rem);
+            padding: clamp(0.8rem, 2.6vw, 3rem);
+        }
+
+        .hud-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(var(--hud-width), 1fr));
+            justify-content: space-between;
+            gap: var(--hud-gap);
+            width: 100%;
+            pointer-events: none;
+        }
+
+        .hud-column {
+            display: grid;
+            gap: clamp(0.6rem, 1.4vw, 1.5rem);
+        }
+
+        .hud-column > * {
+            pointer-events: auto;
+        }
+
+        .bar-card {
+            position: relative;
+            display: grid;
+            gap: clamp(0.45rem, 1.1vw, 0.9rem);
+            padding: var(--hud-padding);
+            border-radius: var(--hud-radius);
+            background: var(--panel-gradient);
+            box-shadow: var(--panel-shadow);
+            overflow: hidden;
+            min-width: var(--hud-width);
+            backdrop-filter: blur(8px);
+        }
+
+        .bar-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%' stop-color='%23162233'/%3E%3Cstop offset='100%' stop-color='%23070c15'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='400' height='240' fill='url(%23g)'/%3E%3Cpath d='M0 200h400' stroke='rgba(146,201,255,0.08)' stroke-width='18'/%3E%3Cpath d='M60 0v240M200 0v240M340 0v240' stroke='rgba(146,201,255,0.05)' stroke-width='6'/%3E%3C/svg%3E");
+            background-size: cover;
+            mix-blend-mode: screen;
+            opacity: 0.55;
+        }
+
+        .bar-header {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: clamp(0.85rem, 1.4vw, 1.1rem);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #d5e9ff;
+            text-shadow: 0 0 0.6rem rgba(120, 200, 255, 0.55);
+        }
+
+        .bar-track {
+            position: relative;
+            height: clamp(0.85rem, 1.9vh, 1.2rem);
+            border-radius: clamp(0.6rem, 1vw, 1rem);
+            background: rgba(10, 16, 28, 0.85);
+            overflow: hidden;
+            box-shadow: inset 0 0 0.35rem rgba(0, 0, 0, 0.8);
+        }
+
+        .bar-track::after {
+            content: "";
+            position: absolute;
+            inset: -120% 0;
+            background: radial-gradient(circle at 50% 0%, rgba(120, 210, 255, 0.25), transparent 65%);
+            animation: barGlow 6s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        .bar-fill {
+            position: relative;
+            height: 100%;
+            border-radius: inherit;
+            transition: width 0.35s ease;
+            box-shadow: 0 0 1.2rem rgba(86, 194, 255, 0.45);
+        }
+
+        .health-bar {
+            background: linear-gradient(90deg, rgba(61, 236, 168, 0.95), rgba(12, 196, 255, 0.95));
+        }
+
+        .energy-bar {
+            background: linear-gradient(90deg, rgba(255, 203, 78, 0.95), rgba(255, 134, 22, 0.95));
+            box-shadow: 0 0 1rem rgba(255, 176, 45, 0.4);
+        }
+
+        .mana-bar {
+            background: linear-gradient(90deg, rgba(108, 184, 255, 0.95), rgba(74, 108, 255, 0.95));
+            box-shadow: 0 0 1rem rgba(122, 173, 255, 0.45);
+        }
+
+        @keyframes barGlow {
+            0%, 100% { opacity: 0.15; transform: translateY(0); }
+            50% { opacity: 0.45; transform: translateY(15%); }
+        }
+
+        .hud-footer {
+            display: grid;
+            width: 100%;
+            grid-template-columns: repeat(auto-fit, minmax(clamp(15rem, 30vw, 22rem), 1fr));
+            gap: var(--hud-gap);
+            align-items: start;
+        }
+
+        #combatLog, #controls {
+            position: relative;
+            width: 100%;
+            min-height: clamp(8rem, 20vh, 14rem);
+            margin: 0;
+            padding: var(--hud-padding);
+            border-radius: var(--hud-radius);
+            background: var(--panel-gradient);
+            box-shadow: var(--panel-shadow);
+            pointer-events: auto;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+        }
+
+        #combatLog {
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.3rem, 0.5vh, 0.45rem);
+            font-size: clamp(0.75rem, 1.1vw, 0.9rem);
+            overflow-y: auto;
+            height: auto;
+        }
+
+        #controls {
+            display: grid;
+            gap: clamp(0.4rem, 0.8vw, 0.75rem);
+            font-size: clamp(0.75rem, 1.1vw, 0.9rem);
+        }
+
+        .control-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: clamp(0.35rem, 0.8vw, 0.8rem);
+            background: rgba(18, 28, 42, 0.65);
+            padding: clamp(0.35rem, 0.9vh, 0.65rem);
+            border-radius: clamp(0.4rem, 1vw, 0.8rem);
+            box-shadow: inset 0 0 0.25rem rgba(118, 186, 255, 0.25);
+            margin: 0;
+        }
+
+        .control-item label {
+            flex: 1 1 auto;
+        }
+
+        .control-item select {
+            flex: 0 0 clamp(6rem, 10vw, 8rem);
+            border-radius: 999px;
+            border: none;
+            padding: clamp(0.25rem, 0.6vh, 0.5rem) clamp(0.6rem, 1.2vw, 1rem);
+            background: linear-gradient(135deg, rgba(50, 80, 120, 0.9), rgba(30, 40, 70, 0.9));
+            color: #d5e9ff;
+        }
+
+        #comboPoints {
+            position: relative;
+            display: grid;
+            grid-auto-flow: column;
+            justify-content: flex-start;
+            gap: clamp(0.35rem, 0.8vw, 0.8rem);
+            padding: clamp(0.3rem, 0.7vw, 0.6rem) clamp(0.6rem, 1.6vw, 1.2rem);
+            border-radius: clamp(0.6rem, 1.4vw, 1.1rem);
+            background: linear-gradient(135deg, rgba(38, 31, 16, 0.9), rgba(66, 42, 10, 0.92));
+            box-shadow: 0 0.6rem 1.4rem rgba(20, 10, 0, 0.5), inset 0 0 0.2rem rgba(255, 214, 102, 0.3);
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+        }
+
+        #playerBuffs {
+            position: relative;
+            display: flex;
+            flex-wrap: wrap;
+            gap: clamp(0.4rem, 0.9vw, 0.9rem);
+            padding: clamp(0.35rem, 0.9vw, 0.8rem);
+            border-radius: clamp(0.6rem, 1.4vw, 1.1rem);
+            background: linear-gradient(135deg, rgba(16, 32, 38, 0.9), rgba(24, 16, 36, 0.9));
+            box-shadow: 0 0.6rem 1.4rem rgba(4, 10, 20, 0.55), inset 0 0 0.2rem rgba(146, 201, 255, 0.25);
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+        }
+
+        #playerBuffs .buff-icon {
+            pointer-events: auto;
+        }
+
+        #enemyCastBar {
+            position: relative;
+            width: 100%;
+            min-height: clamp(1.8rem, 3.6vh, 2.4rem);
+            padding: clamp(0.35rem, 0.8vw, 0.6rem);
+            border-radius: clamp(0.75rem, 1.4vw, 1.2rem);
+            background: linear-gradient(135deg, rgba(10, 18, 36, 0.92), rgba(8, 12, 24, 0.96));
+            box-shadow: var(--panel-shadow);
+            overflow: hidden;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+        }
+
+        #enemyCastBar .cast-progress {
+            position: absolute;
+            left: clamp(0.25rem, 0.6vw, 0.45rem);
+            top: clamp(0.25rem, 0.6vw, 0.45rem);
+            bottom: clamp(0.25rem, 0.6vw, 0.45rem);
+            border-radius: clamp(0.6rem, 1vw, 0.9rem);
+            background: linear-gradient(90deg, rgba(84, 180, 255, 0.95), rgba(44, 108, 255, 0.95));
+            width: 0;
+            box-shadow: 0 0 1.2rem rgba(84, 180, 255, 0.45);
+        }
+
+        #enemyCastBar .cast-text {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(0.75rem, 1.2vw, 0.95rem);
+            color: #dce9ff;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        #targetIndicator {
+            position: relative;
+            align-self: center;
+            padding: clamp(0.4rem, 0.9vw, 0.75rem) clamp(1rem, 2.6vw, 2.2rem);
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(54, 18, 24, 0.92), rgba(92, 28, 36, 0.92));
+            color: #ffdede;
+            font-size: clamp(0.75rem, 1.4vw, 1rem);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            box-shadow: 0 0.5rem 1.2rem rgba(82, 8, 16, 0.6);
+            pointer-events: auto;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+            transform: none;
+        }
+
+        #abilities {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(clamp(3.4rem, 6vw, 4.8rem), 1fr));
+            gap: clamp(0.5rem, 1.4vw, 1.4rem);
+            align-self: center;
+            width: clamp(20rem, 68vw, 48rem);
+            padding: clamp(0.8rem, 1.8vw, 2rem);
+            border-radius: clamp(1.2rem, 2.4vw, 2.8rem);
+            background: linear-gradient(135deg, rgba(16, 24, 40, 0.92), rgba(6, 10, 24, 0.96));
+            box-shadow: 0 1.4rem 2.6rem rgba(4, 8, 18, 0.6), inset 0 0 0.25rem rgba(146, 201, 255, 0.2);
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            left: auto;
+            transform: none;
+        }
+
+        .ability {
+            position: relative;
+            display: grid;
+            justify-items: center;
+            gap: clamp(0.35rem, 0.8vw, 0.6rem);
+            cursor: pointer;
+        }
+
+        .ability-slot {
+            position: relative;
+            width: clamp(3.2rem, 5.6vw, 4.6rem);
+            aspect-ratio: 1;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(58, 92, 156, 0.95), rgba(26, 36, 64, 0.95));
+            border-radius: clamp(0.8rem, 1.6vw, 1.4rem);
+            box-shadow: 0 1rem 1.6rem rgba(8, 14, 32, 0.65), 0 0 1rem rgba(90, 180, 255, 0.45) inset;
+            -webkit-mask-image: var(--slot-mask);
+            mask-image: var(--slot-mask);
+            -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+            -webkit-mask-size: contain;
+            mask-size: contain;
+            overflow: hidden;
+        }
+
+        .ability-slot::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='rgba(160,220,255,0.3)' stroke-width='4'%3E%3Cpath d='M20 10h100l20 20v80l-20 20H20L0 110V30z'/%3E%3Cpath d='M30 20h80l14 14v72l-14 14H30L16 106V34z'/%3E%3C/g%3E%3C/svg%3E");
+            background-size: cover;
+            mix-blend-mode: screen;
+            opacity: 0.65;
+            z-index: 1;
+        }
+
+        .ability-icon {
+            position: relative;
+            font-size: clamp(1.4rem, 2.8vw, 2.2rem);
+            filter: drop-shadow(0 0 0.45rem rgba(255, 255, 255, 0.6));
+            z-index: 3;
+        }
+
+        .ability-name {
+            font-size: clamp(0.65rem, 1vw, 0.85rem);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #9dbaf5;
+            text-align: center;
+        }
+
+        .ability-key {
+            position: absolute;
+            top: clamp(0.2rem, 0.4vw, 0.35rem);
+            left: clamp(0.3rem, 0.6vw, 0.5rem);
+            font-size: clamp(0.55rem, 0.9vw, 0.75rem);
+            color: rgba(173, 208, 255, 0.8);
+            letter-spacing: 0.08em;
+        }
+
+        .ability:not(.on-cooldown) .ability-slot {
+            animation: abilityReadyPulse 5s ease-in-out infinite;
+        }
+
+        .ability.on-cooldown .ability-slot {
+            filter: saturate(0.6) brightness(0.7);
+        }
+
+        .ability.on-cooldown .ability-slot::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(200deg, rgba(8, 10, 18, 0.85), rgba(18, 26, 44, 0.95));
+            animation: abilityCooldownSweep 1.4s linear infinite;
+            opacity: 0.85;
+            z-index: 2;
+        }
+
+        .ability.activated .ability-slot {
+            animation: abilityActivateFlash 0.55s ease-out;
+        }
+
+        .cooldown-overlay {
+            position: absolute;
+            inset: clamp(0.35rem, 0.8vw, 0.6rem);
+            display: grid;
+            place-items: center;
+            font-size: clamp(0.9rem, 1.6vw, 1.2rem);
+            color: #ffec90;
+            font-weight: 700;
+            text-shadow: 0 0.35rem 0.6rem rgba(0, 0, 0, 0.6);
+            border-radius: clamp(0.6rem, 1.2vw, 1rem);
+            background: rgba(8, 8, 16, 0.75);
+            box-shadow: inset 0 0 0.35rem rgba(255, 255, 255, 0.15);
+            pointer-events: none;
+            z-index: 4;
+        }
+
+        .ability-tooltip {
+            bottom: calc(100% + clamp(0.6rem, 1.2vw, 1rem));
+            border-radius: clamp(0.6rem, 1.2vw, 1rem);
+            background: rgba(12, 16, 30, 0.95);
+            border: 1px solid rgba(146, 201, 255, 0.3);
+            padding: clamp(0.5rem, 1vw, 0.8rem);
+            box-shadow: 0 1rem 2rem rgba(4, 6, 12, 0.65);
+        }
+
+        .ability-tooltip-title {
+            font-size: clamp(0.75rem, 1.1vw, 0.9rem);
+        }
+
+        .ability-tooltip-cooldown {
+            font-size: clamp(0.65rem, 0.95vw, 0.8rem);
+        }
+
+        .ability-tooltip-remaining {
+            font-size: clamp(0.65rem, 0.95vw, 0.8rem);
+        }
+
+        @keyframes abilityReadyPulse {
+            0%, 100% { box-shadow: 0 1rem 1.6rem rgba(30, 80, 160, 0.55), 0 0 1rem rgba(90, 180, 255, 0.5) inset; }
+            50% { box-shadow: 0 1.4rem 1.8rem rgba(60, 140, 255, 0.75), 0 0 1.3rem rgba(160, 230, 255, 0.65) inset; }
+        }
+
+        @keyframes abilityCooldownSweep {
+            0% { transform: translateY(-6%); opacity: 0.9; }
+            50% { opacity: 0.75; }
+            100% { transform: translateY(6%); opacity: 0.9; }
+        }
+
+        @keyframes abilityActivateFlash {
+            0% { filter: brightness(1) saturate(1); box-shadow: 0 1rem 1.6rem rgba(0, 0, 0, 0.6); }
+            30% { filter: brightness(1.6) saturate(1.4); box-shadow: 0 1.4rem 2.2rem rgba(255, 224, 122, 0.6); }
+            100% { filter: brightness(1) saturate(1); box-shadow: 0 1rem 1.6rem rgba(0, 0, 0, 0.6); }
+        }
+
+        @media (max-width: 980px) {
+            .hud-grid {
+                grid-template-columns: minmax(0, 1fr);
+                justify-items: center;
+            }
+
+            .bar-card {
+                min-width: clamp(18rem, 70vw, 24rem);
+            }
+
+            .hud-footer {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        @media (max-width: 640px) {
+            #abilities {
+                width: 100%;
+            }
+
+            .ability-name {
+                display: none;
+            }
+        }

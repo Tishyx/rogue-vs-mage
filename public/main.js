@@ -1,3 +1,4 @@
+function startGame() {
 // Game state
 const gameState = {
     player: {
@@ -4353,4 +4354,11 @@ addCombatMessage('Click to capture mouse', 'ability-use');
 
 // Start game
 animate(0);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startGame);
+} else {
+    startGame();
+}
 
